@@ -1,6 +1,7 @@
 import { API_BASE } from "../config";
 
 const DEFAULT_TIMEOUT_MS = 15000;
+const AUTH_TOKEN_KEY = "ddatAuthToken";
 
 function joinUrl(base, path) {
   if (/^https?:\/\//i.test(path)) return path;
@@ -34,12 +35,14 @@ export async function apiRequest(path, options = {}) {
   const url = joinUrl(API_BASE, path);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const token = localStorage.getItem(AUTH_TOKEN_KEY);
 
   try {
     const response = await fetch(url, {
       ...rest,
       headers: {
         "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...(headers || {}),
       },
       signal: controller.signal,
@@ -49,6 +52,9 @@ export async function apiRequest(path, options = {}) {
     const payload = decodePayload(text);
 
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem(AUTH_TOKEN_KEY);
+      }
       throw new Error(deriveErrorMessage(response, text, payload));
     }
 
@@ -64,11 +70,15 @@ export async function apiRequest(path, options = {}) {
     return payload;
   } catch (error) {
     if (error?.name === "AbortError") {
-      throw new Error("Request timed out. Check backend availability and network latency.");
+      throw new Error(
+        "Request timed out. Check backend availability and network latency.",
+      );
     }
 
     if (error instanceof TypeError) {
-      throw new Error("Cannot reach backend API. Verify server is running and VITE_API_BASE is correct.");
+      throw new Error(
+        "Cannot reach backend API. Verify server is running and VITE_API_BASE is correct.",
+      );
     }
 
     throw error;

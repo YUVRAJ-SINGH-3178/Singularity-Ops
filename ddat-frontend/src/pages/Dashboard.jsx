@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiRequest } from "../lib/apiClient";
-
-function normalizeRole(role) {
-  const value = String(role || "").toLowerCase();
-  if (value === "employee") return "member";
-  if (value === "enterprise_admin") return "executive";
-  if (["member", "affiliate", "executive"].includes(value)) return value;
-  return "member";
-}
+import { normalizeRole } from "../lib/roleUtils";
+import { finalizeInReview, listLabs, listTasksByWallet } from "../lib/taskApi";
+import { getUserProfile } from "../lib/userApi";
+import { APP_ORGANIZATION } from "../config";
 
 function statusBadge(status) {
   if (status === "done") return "tag-settled";
@@ -35,15 +30,12 @@ export default function Dashboard({ wallet }) {
       setLoading(true);
       try {
         if (wallet) {
-          await apiRequest("/tasks/finalize-in-review", {
-            method: "POST",
-            body: JSON.stringify({ walletAddress: wallet }),
-          }).catch(() => {});
+          await finalizeInReview().catch(() => {});
         }
 
         const [labsPayload, profilePayload] = await Promise.all([
-          apiRequest("/tasks/labs/list"),
-          apiRequest(`/user/${wallet}/profile`),
+          listLabs(),
+          getUserProfile(wallet),
         ]);
 
         if (!mounted) return;
@@ -54,7 +46,7 @@ export default function Dashboard({ wallet }) {
           setProfileLoaded(true);
         }
 
-        const taskPayload = await apiRequest(`/tasks?wallet=${wallet}`);
+        const taskPayload = await listTasksByWallet(wallet);
 
         if (!mounted) return;
 
@@ -64,7 +56,10 @@ export default function Dashboard({ wallet }) {
       } catch (err) {
         console.error(err);
         if (mounted) {
-          setNotice(err.message || "Could not load workspace data. Please refresh after backend is up.");
+          setNotice(
+            err.message ||
+              "Could not load workspace data. Please refresh after backend is up.",
+          );
         }
       } finally {
         if (mounted) setLoading(false);
@@ -82,7 +77,9 @@ export default function Dashboard({ wallet }) {
 
   const stats = useMemo(() => {
     const inReview = tasks.filter((t) => t.status === "in_review").length;
-    const done = tasks.filter((t) => ["done", "approved"].includes(t.status)).length;
+    const done = tasks.filter((t) =>
+      ["done", "approved"].includes(t.status),
+    ).length;
     const rejected = tasks.filter((t) => t.status === "rejected").length;
     return {
       total: tasks.length,
@@ -104,15 +101,17 @@ export default function Dashboard({ wallet }) {
               </div>
 
               <h1 className="text-6xl sm:text-7xl lg:text-[5.2rem] font-black leading-[1.03] tracking-tighter text-black uppercase">
-                Build Teams.<br />
-                Ship Daily.<br />
+                Build Teams.
+                <br />
+                Ship Daily.
+                <br />
                 Validate Work.
               </h1>
 
               <p className="text-xl font-medium text-black/80 max-w-xl leading-relaxed">
-                DDAT is now focused on enterprise delivery: create tasks by lab,
-                let employees submit work, and run daily votes to decide if work
-                counts.
+                Singularity Ops is focused on enterprise delivery: create tasks
+                by lab, let employees submit work, and run daily votes to decide
+                if work counts.
               </p>
             </div>
 
@@ -121,9 +120,15 @@ export default function Dashboard({ wallet }) {
                 Singularity Labs
               </div>
               <div className="p-6 bg-[#f4f4f5] space-y-3">
-                <div className="neo-card p-4">Bhaskarcharya Lab • Web3 and Blockchain</div>
-                <div className="neo-card p-4">Prajna Kritrima Lab • AI and Generative AI</div>
-                <div className="neo-card p-4">Varahamihira Lab • Cloud and Cybersecurity</div>
+                <div className="neo-card p-4">
+                  Bhaskarcharya Lab • Web3 and Blockchain
+                </div>
+                <div className="neo-card p-4">
+                  Prajna Kritrima Lab • AI and Generative AI
+                </div>
+                <div className="neo-card p-4">
+                  Varahamihira Lab • Cloud and Cybersecurity
+                </div>
               </div>
             </div>
           </div>
@@ -132,7 +137,11 @@ export default function Dashboard({ wallet }) {
     );
   }
 
-  const profileReady = Boolean(profile?.organization && profile?.displayName && normalizeRole(profile?.role));
+  const profileReady = Boolean(
+    profile?.organization &&
+    profile?.displayName &&
+    normalizeRole(profile?.role),
+  );
   const userLab = labs.find((lab) => lab.key === profile?.labKey);
 
   return (
@@ -143,13 +152,17 @@ export default function Dashboard({ wallet }) {
             Workspace Overview
           </h1>
           <p className="text-white/70 font-bold mt-2">
-            {profile?.organization || "Set your organization in settings"}
+            {profile?.organization || APP_ORGANIZATION}
             {userLab ? ` • ${userLab.name}` : ""}
           </p>
         </div>
         <div className="flex gap-3">
-          <Link to="/create" className="neo-btn neo-btn-yellow translate-push">Create Task</Link>
-          <Link to="/feed" className="neo-btn neo-btn-sage translate-push">Vote Queue</Link>
+          <Link to="/create" className="neo-btn neo-btn-yellow translate-push">
+            Create Task
+          </Link>
+          <Link to="/feed" className="neo-btn neo-btn-sage translate-push">
+            Vote Queue
+          </Link>
         </div>
       </div>
 
@@ -163,13 +176,17 @@ export default function Dashboard({ wallet }) {
 
       {notice && (
         <div className="mb-6 bg-[#ff5f57] border-2 border-black rounded-xl p-4 shadow-hard">
-          <p className="font-bold uppercase text-xs tracking-wide text-white">{notice}</p>
+          <p className="font-bold uppercase text-xs tracking-wide text-white">
+            {notice}
+          </p>
         </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-5 mb-8">
         <div className="neo-card p-5">
-          <p className="text-xs font-bold uppercase text-black/60">Total Tasks</p>
+          <p className="text-xs font-bold uppercase text-black/60">
+            Total Tasks
+          </p>
           <p className="text-4xl font-heading font-black">{stats.total}</p>
         </div>
         <div className="neo-card p-5 bg-[var(--color-yellow)]">
@@ -194,29 +211,43 @@ export default function Dashboard({ wallet }) {
 
         {tasks.length === 0 ? (
           <div className="bg-[#f4f4f5] border-2 border-dashed border-black/30 rounded-xl p-12 text-center">
-            <p className="font-bold uppercase text-black/60 mb-4">No tasks yet</p>
-            <Link to="/create" className="neo-btn translate-push">Create First Task</Link>
+            <p className="font-bold uppercase text-black/60 mb-4">
+              No tasks yet
+            </p>
+            <Link to="/create" className="neo-btn translate-push">
+              Create First Task
+            </Link>
           </div>
         ) : (
           <div className="space-y-4">
             {tasks.slice(0, 8).map((task) => (
-              <div key={task._id} className="border-2 border-black/20 rounded-xl p-4 grid sm:grid-cols-5 gap-3 items-center">
+              <div
+                key={task._id}
+                className="border-2 border-black/20 rounded-xl p-4 grid sm:grid-cols-5 gap-3 items-center"
+              >
                 <div className="sm:col-span-2">
-                  <p className="font-black text-black uppercase leading-tight">{task.title}</p>
+                  <p className="font-black text-black uppercase leading-tight">
+                    {task.title}
+                  </p>
                   <p className="text-xs font-bold text-black/60 mt-1 uppercase">
                     {new Date(task.workDate).toLocaleDateString()}
-                    {task.endDate ? ` - ${new Date(task.endDate).toLocaleDateString()}` : ""}
+                    {task.endDate
+                      ? ` - ${new Date(task.endDate).toLocaleDateString()}`
+                      : ""}
                     {` • ${task.source}`}
                   </p>
                 </div>
                 <div className="text-xs font-bold uppercase text-black/70">
-                  {labs.find((lab) => lab.key === task.labKey)?.name || task.labKey}
+                  {labs.find((lab) => lab.key === task.labKey)?.name ||
+                    task.labKey}
                 </div>
                 <div className="text-xs font-bold uppercase text-black/70 break-all">
                   {task.assignedToWallet || "Self-owned"}
                 </div>
                 <div>
-                  <span className={`tag ${statusBadge(task.status)}`}>{task.status.replace("_", " ")}</span>
+                  <span className={`tag ${statusBadge(task.status)}`}>
+                    {task.status.replace("_", " ")}
+                  </span>
                 </div>
               </div>
             ))}

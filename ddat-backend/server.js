@@ -24,7 +24,9 @@ Sentry.init({
 process.on("unhandledRejection", (reason) => {
   console.error("Unhandled promise rejection:", reason);
   if (sentryEnabled) {
-    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+    Sentry.captureException(
+      reason instanceof Error ? reason : new Error(String(reason)),
+    );
   }
 });
 
@@ -42,6 +44,7 @@ const voteRoutes = require("./routes/vote");
 const userRoutes = require("./routes/user");
 const adminRoutes = require("./routes/admin");
 const taskRoutes = require("./routes/task");
+const authRoutes = require("./routes/auth");
 
 // ─── Initialize app ─────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
@@ -75,7 +78,7 @@ async function connectDbWithRetryLoop() {
     await connectDB();
   } catch (error) {
     console.error(
-      `⚠️  DB connect failed. Retrying in ${DB_RECONNECT_DELAY_MS}ms: ${error.message}`
+      `⚠️  DB connect failed. Retrying in ${DB_RECONNECT_DELAY_MS}ms: ${error.message}`,
     );
     setTimeout(() => {
       connectDbWithRetryLoop().catch((retryError) => {
@@ -89,8 +92,8 @@ async function connectDbWithRetryLoop() {
 
 // ─── Rate limiters ──────────────────────────────────────────────────────────
 const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,   // 15 minutes
-  limit: 100,                  // 100 requests per window per IP
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 100, // 100 requests per window per IP
   standardHeaders: "draft-7",
   legacyHeaders: false,
   skip: (req) => {
@@ -103,7 +106,7 @@ const globalLimiter = rateLimit({
 
 const writeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 20,                   // 20 writes per 15 min per IP
+  limit: 20, // 20 writes per 15 min per IP
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { success: false, error: "Too many submissions. Slow down." },
@@ -111,7 +114,7 @@ const writeLimiter = rateLimit({
 
 const voteLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  limit: 30,                   // 30 votes per 15 min per IP
+  limit: 30, // 30 votes per 15 min per IP
   standardHeaders: "draft-7",
   legacyHeaders: false,
   message: { success: false, error: "Too many votes. Try again later." },
@@ -136,8 +139,8 @@ function createApp() {
             origin: corsOrigins,
             methods: ["GET", "POST", "DELETE", "OPTIONS"],
           }
-        : undefined
-    )
+        : undefined,
+    ),
   );
   app.use(helmet());
 
@@ -147,7 +150,8 @@ function createApp() {
     }
 
     const forwardedProto = req.header("x-forwarded-proto") || "";
-    const isSecure = req.secure || forwardedProto.split(",")[0].trim() === "https";
+    const isSecure =
+      req.secure || forwardedProto.split(",")[0].trim() === "https";
     if (isSecure) {
       return next();
     }
@@ -171,14 +175,15 @@ function createApp() {
   app.use(morgan("dev"));
 
   // ─── Routes ───────────────────────────────────────────────────────────────
-  app.use("/api/commitment", writeLimiter, commitmentRoutes);   // POST /api/commitment
-  app.use("/api/commitments", commitmentRoutes);                // GET  /api/commitments/:walletAddress
-  app.use("/api/proof", writeLimiter, proofRoutes);             // POST /api/proof/:commitmentId
-  app.use("/api/proofs", proofRoutes);                          // GET  /api/proofs/feed
-  app.use("/api/vote", voteLimiter, voteRoutes);                // POST /api/vote/:proofId
-  app.use("/api/user", userRoutes);                             // GET/DELETE /api/user/:wallet
-  app.use("/api/admin", writeLimiter, adminRoutes);             // GET/POST admin pool operations
-  app.use("/api/tasks", taskRoutes);                            // Enterprise task workflow
+  app.use("/api/auth", authRoutes); // Nonce/signature auth
+  app.use("/api/commitment", writeLimiter, commitmentRoutes); // POST /api/commitment
+  app.use("/api/commitments", commitmentRoutes); // GET  /api/commitments/:walletAddress
+  app.use("/api/proof", writeLimiter, proofRoutes); // POST /api/proof/:commitmentId
+  app.use("/api/proofs", proofRoutes); // GET  /api/proofs/feed
+  app.use("/api/vote", voteLimiter, voteRoutes); // POST /api/vote/:proofId
+  app.use("/api/user", userRoutes); // GET/DELETE /api/user/:wallet
+  app.use("/api/admin", writeLimiter, adminRoutes); // GET/POST admin pool operations
+  app.use("/api/tasks", taskRoutes); // Enterprise task workflow
 
   // ─── Health check ─────────────────────────────────────────────────────────
   app.get("/api/health", (req, res) => {

@@ -2,11 +2,17 @@ const express = require("express");
 const Commitment = require("../models/Commitment");
 const Proof = require("../models/Proof");
 const User = require("../models/User");
+const { APP_ORGANIZATION } = require("../config/app");
+const { requireAuth } = require("../middleware/auth");
 
 const router = express.Router();
 
+router.use(requireAuth);
+
 function normalizeRole(inputRole) {
-  const value = String(inputRole || "").trim().toLowerCase();
+  const value = String(inputRole || "")
+    .trim()
+    .toLowerCase();
 
   if (value === "enterprise_admin") return "executive";
   if (value === "employee") return "member";
@@ -24,14 +30,27 @@ router.get("/:wallet/profile", async (req, res) => {
     const { wallet } = req.params;
 
     if (!wallet || typeof wallet !== "string" || wallet.length < 5) {
-      return res.status(400).json({ success: false, message: "Invalid wallet address" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid wallet address" });
     }
 
     const normalizedWallet = wallet.toLowerCase().trim();
+    if (normalizedWallet !== req.auth.walletAddress) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Wallet mismatch" });
+    }
     let user = await User.findOne({ walletAddress: normalizedWallet });
 
     if (!user) {
-      user = await User.create({ walletAddress: normalizedWallet });
+      user = await User.create({
+        walletAddress: normalizedWallet,
+        organization: APP_ORGANIZATION,
+      });
+    } else if (String(user.organization || "").trim() !== APP_ORGANIZATION) {
+      user.organization = APP_ORGANIZATION;
+      await user.save();
     }
 
     res.json({
@@ -49,7 +68,9 @@ router.get("/:wallet/profile", async (req, res) => {
     });
   } catch (err) {
     console.error("Error fetching profile:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch profile" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch profile" });
   }
 });
 
@@ -60,35 +81,59 @@ router.get("/:wallet/profile", async (req, res) => {
 router.post("/:wallet/profile", async (req, res) => {
   try {
     const { wallet } = req.params;
-    const { displayName = "", email = "", role = "member", organization = "", labKey = "" } = req.body || {};
+    const {
+      displayName = "",
+      email = "",
+      role = "member",
+      organization = "",
+      labKey = "",
+    } = req.body || {};
 
     if (!wallet || typeof wallet !== "string" || wallet.length < 5) {
-      return res.status(400).json({ success: false, message: "Invalid wallet address" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid wallet address" });
     }
 
     // Validate email domain
     if (email && !String(email).toLowerCase().endsWith("@srmap.edu.in")) {
-      return res.status(400).json({ success: false, message: "Email must be from @srmap.edu.in domain" });
+      return res.status(400).json({
+        success: false,
+        message: "Email must be from @srmap.edu.in domain",
+      });
     }
 
     const normalizedWallet = wallet.toLowerCase().trim();
+    if (normalizedWallet !== req.auth.walletAddress) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Wallet mismatch" });
+    }
     const currentUser = await User.findOne({ walletAddress: normalizedWallet });
-    
-    const currentRole = currentUser ? normalizeRole(currentUser.role) : "member";
+
+    const currentRole = currentUser
+      ? normalizeRole(currentUser.role)
+      : "member";
     const newRole = normalizeRole(role);
-    
+
     // Members/Affiliates can only request role changes, not apply them directly
-    const isRoleChangeRequest = newRole !== currentRole && !["executive"].includes(currentRole);
+    const isRoleChangeRequest =
+      newRole !== currentRole && !["executive"].includes(currentRole);
 
     if (!["member", "affiliate", "executive"].includes(newRole)) {
-      return res.status(400).json({ success: false, message: "Role must be member, affiliate, or executive" });
+      return res.status(400).json({
+        success: false,
+        message: "Role must be member, affiliate, or executive",
+      });
     }
 
     const updateData = {
       walletAddress: normalizedWallet,
       displayName: String(displayName || "").trim(),
-      email: String(email || "").trim().toLowerCase(),
-      organization: String(organization || "").trim(),
+      email: String(email || "")
+        .trim()
+        .toLowerCase(),
+      organization: APP_ORGANIZATION,
       labKey: String(labKey || "").trim(),
     };
 
@@ -106,12 +151,14 @@ router.post("/:wallet/profile", async (req, res) => {
     const user = await User.findOneAndUpdate(
       { walletAddress: normalizedWallet },
       updateData,
-      { new: true, upsert: true, setDefaultsOnInsert: true }
+      { new: true, upsert: true, setDefaultsOnInsert: true },
     );
 
     res.json({
       success: true,
-      message: isRoleChangeRequest ? "Role change request submitted. Awaiting executive approval." : "Profile updated.",
+      message: isRoleChangeRequest
+        ? "Role change request submitted. Awaiting executive approval."
+        : "Profile updated.",
       data: {
         walletAddress: user.walletAddress,
         displayName: user.displayName || "",
@@ -125,7 +172,9 @@ router.post("/:wallet/profile", async (req, res) => {
     });
   } catch (err) {
     console.error("Error updating profile:", err);
-    res.status(500).json({ success: false, message: "Failed to update profile" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to update profile" });
   }
 });
 
@@ -139,20 +188,29 @@ router.get("/:wallet/activity", async (req, res) => {
 
     // Validate wallet address
     if (!wallet || typeof wallet !== "string" || wallet.length < 5) {
-      return res.status(400).json({ success: false, message: "Invalid wallet address" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid wallet address" });
     }
 
     const normalizedWallet = wallet.toLowerCase();
+    if (normalizedWallet !== req.auth.walletAddress) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Wallet mismatch" });
+    }
 
     // Find all commitments by this wallet
-    const commitments = await Commitment.find({ walletAddress: normalizedWallet }).sort({ createdAt: -1 });
-    const commitmentIds = commitments.map(c => c._id);
+    const commitments = await Commitment.find({
+      walletAddress: normalizedWallet,
+    }).sort({ createdAt: -1 });
+    const commitmentIds = commitments.map((c) => c._id);
 
     // Build activity array
     const activity = [];
 
     // Add commitment events
-    commitments.forEach(commitment => {
+    commitments.forEach((commitment) => {
       activity.push({
         type: "commitment_created",
         timestamp: commitment.createdAt,
@@ -189,7 +247,9 @@ router.get("/:wallet/activity", async (req, res) => {
     res.json({ success: true, data: activity });
   } catch (err) {
     console.error("Error fetching activity:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch activity" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch activity" });
   }
 });
 
@@ -200,10 +260,12 @@ router.get("/:wallet/activity", async (req, res) => {
 router.get("/members/by-lab/:labKey", async (req, res) => {
   try {
     const { labKey } = req.params;
-    const { wallet, includeAll } = req.query;
+    const { includeAll } = req.query;
 
     if (!labKey || typeof labKey !== "string") {
-      return res.status(400).json({ success: false, message: "Invalid lab key" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid lab key" });
     }
 
     const normalizedLabKey = String(labKey).trim();
@@ -214,49 +276,57 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
     let members = [...membersByLab];
 
     // Expand with organization teammates for better discoverability from executive dashboards.
-    if (wallet && typeof wallet === "string") {
-      const requester = await User.findOne({ walletAddress: wallet.toLowerCase().trim() });
-      const requesterOrganization = String(requester?.organization || "").trim();
-      const requesterRole = normalizeRole(requester?.role);
+    const requester = await User.findOne({
+      walletAddress: req.auth.walletAddress,
+    });
+    const requesterOrganization = String(requester?.organization || "").trim();
+    const requesterRole = normalizeRole(requester?.role);
 
-      // Executives/Affiliates can assign broadly, so include all known user profiles.
-      if (["executive", "affiliate"].includes(requesterRole) || String(includeAll || "") === "1") {
-        const allUsers = await User.find({ walletAddress: { $exists: true, $ne: "" } }).sort({ displayName: 1 });
-        const byWallet = new Map();
-        [...membersByLab, ...allUsers].forEach((member) => {
-          byWallet.set(member.walletAddress, member);
-        });
-        members = Array.from(byWallet.values()).sort((a, b) => {
-          const left = String(a.displayName || a.walletAddress).toLowerCase();
-          const right = String(b.displayName || b.walletAddress).toLowerCase();
-          return left.localeCompare(right);
-        });
-      }
-
-      if (requesterOrganization) {
-        const membersByOrganization = await User.find({
-          organization: { $regex: new RegExp(`^${requesterOrganization}$`, "i") },
-        }).sort({ displayName: 1 });
-        const byWallet = new Map();
-
-        [...members, ...membersByOrganization].forEach((member) => {
-          byWallet.set(member.walletAddress, member);
-        });
-
-        members = Array.from(byWallet.values()).sort((a, b) => {
-          const left = String(a.displayName || a.walletAddress).toLowerCase();
-          const right = String(b.displayName || b.walletAddress).toLowerCase();
-          return left.localeCompare(right);
-        });
-      }
+    // Executives/Affiliates can assign broadly, so include all known user profiles.
+    if (
+      ["executive", "affiliate"].includes(requesterRole) ||
+      String(includeAll || "") === "1"
+    ) {
+      const allUsers = await User.find({
+        walletAddress: { $exists: true, $ne: "" },
+      }).sort({ displayName: 1 });
+      const byWallet = new Map();
+      [...membersByLab, ...allUsers].forEach((member) => {
+        byWallet.set(member.walletAddress, member);
+      });
+      members = Array.from(byWallet.values()).sort((a, b) => {
+        const left = String(a.displayName || a.walletAddress).toLowerCase();
+        const right = String(b.displayName || b.walletAddress).toLowerCase();
+        return left.localeCompare(right);
+      });
     }
 
+    if (requesterOrganization) {
+      const membersByOrganization = await User.find({
+        organization: {
+          $regex: new RegExp(`^${requesterOrganization}$`, "i"),
+        },
+      }).sort({ displayName: 1 });
+      const byWallet = new Map();
+
+      [...members, ...membersByOrganization].forEach((member) => {
+        byWallet.set(member.walletAddress, member);
+      });
+
+      members = Array.from(byWallet.values()).sort((a, b) => {
+        const left = String(a.displayName || a.walletAddress).toLowerCase();
+        const right = String(b.displayName || b.walletAddress).toLowerCase();
+        return left.localeCompare(right);
+      });
+    }
     // Last-resort fallback: return all profiles that have at least a wallet and display hint.
     if (members.length === 0) {
-      members = await User.find({ walletAddress: { $exists: true, $ne: "" } }).sort({ displayName: 1 });
+      members = await User.find({
+        walletAddress: { $exists: true, $ne: "" },
+      }).sort({ displayName: 1 });
     }
 
-    const data = members.map(user => ({
+    const data = members.map((user) => ({
       walletAddress: user.walletAddress,
       displayName: user.displayName || user.walletAddress,
       email: user.email || "",
@@ -268,7 +338,9 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
     res.json({ success: true, data });
   } catch (err) {
     console.error("Error fetching lab members:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch lab members" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch lab members" });
   }
 });
 
@@ -278,14 +350,14 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
  */
 router.get("/role-requests/pending", async (req, res) => {
   try {
-    const { executiveWallet } = req.query;
-    if (!executiveWallet || typeof executiveWallet !== "string") {
-      return res.status(400).json({ success: false, message: "executiveWallet is required" });
-    }
-
-    const executive = await User.findOne({ walletAddress: executiveWallet.toLowerCase().trim() });
+    const executive = await User.findOne({
+      walletAddress: req.auth.walletAddress,
+    });
     if (!executive || normalizeRole(executive.role) !== "executive") {
-      return res.status(403).json({ success: false, message: "Only executives can view role requests" });
+      return res.status(403).json({
+        success: false,
+        message: "Only executives can view role requests",
+      });
     }
 
     const executiveLabKey = String(executive.labKey || "").trim();
@@ -298,7 +370,7 @@ router.get("/role-requests/pending", async (req, res) => {
       labKey: executiveLabKey,
     }).sort({ requestedRoleAt: -1 });
 
-    const data = requests.map(user => ({
+    const data = requests.map((user) => ({
       walletAddress: user.walletAddress,
       displayName: user.displayName || user.walletAddress,
       email: user.email || "",
@@ -312,7 +384,9 @@ router.get("/role-requests/pending", async (req, res) => {
     res.json({ success: true, data });
   } catch (err) {
     console.error("Error fetching role requests:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch role requests" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to fetch role requests" });
   }
 });
 
@@ -323,29 +397,45 @@ router.get("/role-requests/pending", async (req, res) => {
 router.post("/:wallet/approve-role", async (req, res) => {
   try {
     const { wallet } = req.params;
-    const { executiveWallet, approve = true } = req.body || {};
+    const { approve = true } = req.body || {};
 
-    if (!wallet || !executiveWallet) {
-      return res.status(400).json({ success: false, message: "wallet and executiveWallet required" });
+    if (!wallet) {
+      return res
+        .status(400)
+        .json({ success: false, message: "wallet is required" });
     }
 
     // Verify executive role
-    const executive = await User.findOne({ walletAddress: executiveWallet.toLowerCase().trim() });
+    const executive = await User.findOne({
+      walletAddress: req.auth.walletAddress,
+    });
     if (!executive || normalizeRole(executive.role) !== "executive") {
-      return res.status(403).json({ success: false, message: "Only executives can approve role changes" });
+      return res.status(403).json({
+        success: false,
+        message: "Only executives can approve role changes",
+      });
     }
 
     const normalizedWallet = wallet.toLowerCase().trim();
     const user = await User.findOne({ walletAddress: normalizedWallet });
 
     if (!user || !user.requestedRole) {
-      return res.status(404).json({ success: false, message: "No pending role request found" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No pending role request found" });
     }
 
-    const executiveLabKey = String(executive.labKey || "").trim().toLowerCase();
-    const targetLabKey = String(user.labKey || "").trim().toLowerCase();
+    const executiveLabKey = String(executive.labKey || "")
+      .trim()
+      .toLowerCase();
+    const targetLabKey = String(user.labKey || "")
+      .trim()
+      .toLowerCase();
     if (!executiveLabKey || !targetLabKey || executiveLabKey !== targetLabKey) {
-      return res.status(403).json({ success: false, message: "You can only manage role requests from your own lab" });
+      return res.status(403).json({
+        success: false,
+        message: "You can only manage role requests from your own lab",
+      });
     }
 
     if (approve) {
@@ -373,7 +463,9 @@ router.post("/:wallet/approve-role", async (req, res) => {
     });
   } catch (err) {
     console.error("Error approving role change:", err);
-    res.status(500).json({ success: false, message: "Failed to approve role change" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to approve role change" });
   }
 });
 
@@ -387,14 +479,23 @@ router.delete("/:wallet", async (req, res) => {
 
     // Validate wallet address
     if (!wallet || typeof wallet !== "string" || wallet.length < 5) {
-      return res.status(400).json({ success: false, message: "Invalid wallet address" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Invalid wallet address" });
     }
 
     const normalizedWallet = wallet.toLowerCase();
+    if (normalizedWallet !== req.auth.walletAddress) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Wallet mismatch" });
+    }
 
     // Find and delete all commitments by this user
-    const commitments = await Commitment.find({ walletAddress: normalizedWallet });
-    const commitmentIds = commitments.map(c => c._id);
+    const commitments = await Commitment.find({
+      walletAddress: normalizedWallet,
+    });
+    const commitmentIds = commitments.map((c) => c._id);
 
     // Delete all proofs for these commitments
     await Proof.deleteMany({ commitmentId: { $in: commitmentIds } });
@@ -405,10 +506,15 @@ router.delete("/:wallet", async (req, res) => {
     // Delete user record if exists
     await User.deleteOne({ walletAddress: normalizedWallet });
 
-    res.json({ success: true, message: "Account and all data deleted successfully" });
+    res.json({
+      success: true,
+      message: "Account and all data deleted successfully",
+    });
   } catch (err) {
     console.error("Error deleting account:", err);
-    res.status(500).json({ success: false, message: "Failed to delete account" });
+    res
+      .status(500)
+      .json({ success: false, message: "Failed to delete account" });
   }
 });
 

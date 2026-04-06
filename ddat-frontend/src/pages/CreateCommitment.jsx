@@ -1,53 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { apiRequest } from "../lib/apiClient";
 import MemberSelector from "../components/MemberSelector";
-
-const FALLBACK_LABS = [
-  {
-    key: "bhaskarcharya",
-    name: "Bhaskarcharya Lab",
-    focus: "Web3 and Blockchain",
-  },
-  {
-    key: "prajna-kritrima",
-    name: "Prajna Kritrima Lab",
-    focus: "AI/ML, Deep Learning and Generative AI",
-  },
-  {
-    key: "aanu-tattva",
-    name: "Aanu Tattva Lab",
-    focus: "Quantum Computing and Quantum Machine Learning",
-  },
-  {
-    key: "chitra-darshan",
-    name: "Chitra Darshan Lab",
-    focus: "Game Development, AR, VR and Mixed Reality",
-  },
-  {
-    key: "varahamihira",
-    name: "Varahamihira Lab",
-    focus: "Cloud Computing and Cybersecurity",
-  },
-  {
-    key: "agastya",
-    name: "Agastya Lab",
-    focus: "Robotics, IoT and Embedded Systems",
-  },
-  {
-    key: "navya-vigyan",
-    name: "Navya Vigyan Lab",
-    focus: "Interdisciplinary and Experimental Technology",
-  },
-];
-
-function normalizeRole(role) {
-  const value = String(role || "").toLowerCase();
-  if (value === "employee") return "member";
-  if (value === "enterprise_admin") return "executive";
-  if (["member", "affiliate", "executive"].includes(value)) return value;
-  return "member";
-}
+import { FALLBACK_LABS } from "../lib/labCatalog";
+import {
+  canCreateEnterpriseTask as canCreateEnterpriseTaskByRole,
+  isMember,
+  normalizeRole,
+} from "../lib/roleUtils";
+import { createTask, listLabs } from "../lib/taskApi";
+import { getUserProfile } from "../lib/userApi";
+import { APP_ORGANIZATION } from "../config";
 
 function getLocalDateInputValue(date = new Date()) {
   const year = date.getFullYear();
@@ -75,8 +37,8 @@ export default function CreateCommitment({ wallet }) {
     const loadMeta = async () => {
       try {
         const [labsPayload, profilePayload] = await Promise.all([
-          apiRequest("/tasks/labs/list"),
-          apiRequest(`/user/${wallet}/profile`),
+          listLabs(),
+          getUserProfile(wallet),
         ]);
 
         if (labsPayload?.success) {
@@ -114,19 +76,16 @@ export default function CreateCommitment({ wallet }) {
   }, [wallet, labKey]);
 
   const canCreateEnterpriseTask = useMemo(
-    () => ["affiliate", "executive"].includes(normalizeRole(profile?.role)),
+    () => canCreateEnterpriseTaskByRole(profile?.role),
     [profile],
   );
-  const isMember = useMemo(
-    () => normalizeRole(profile?.role) === "member",
-    [profile],
-  );
+  const userIsMember = useMemo(() => isMember(profile?.role), [profile]);
 
   useEffect(() => {
-    if (!wallet || !isMember) return;
+    if (!wallet || !userIsMember) return;
     setAssignedToWallet(wallet.toLowerCase());
     setSource("employee");
-  }, [wallet, isMember]);
+  }, [wallet, userIsMember]);
 
   useEffect(() => {
     if (!workDate) return;
@@ -138,14 +97,6 @@ export default function CreateCommitment({ wallet }) {
   const submitTask = async (e) => {
     e.preventDefault();
     if (!wallet) return;
-
-    if (!profile?.organization) {
-      setStatus({
-        type: "error",
-        message: "Set organization in Settings first.",
-      });
-      return;
-    }
 
     if (!title || !labKey || !workDate || !endDate) {
       setStatus({
@@ -175,21 +126,18 @@ export default function CreateCommitment({ wallet }) {
     setStatus({ type: "", message: "" });
 
     try {
-      await apiRequest("/tasks", {
-        method: "POST",
-        body: JSON.stringify({
-          title,
-          description,
-          organization: profile.organization,
-          labKey,
-          source,
-          createdByWallet: wallet,
-          assignedToWallet: (isMember ? wallet : assignedToWallet)
-            .trim()
-            .toLowerCase(),
-          workDate,
-          endDate,
-        }),
+      await createTask({
+        title,
+        description,
+        organization: APP_ORGANIZATION,
+        labKey,
+        source,
+        createdByWallet: wallet,
+        assignedToWallet: (userIsMember ? wallet : assignedToWallet)
+          .trim()
+          .toLowerCase(),
+        workDate,
+        endDate,
       });
 
       setStatus({ type: "success", message: "Task created successfully." });
@@ -332,10 +280,10 @@ export default function CreateCommitment({ wallet }) {
             onWalletChange={(wallet) => setAssignedToWallet(wallet)}
             requesterWallet={wallet}
             includeAllMembers={canCreateEnterpriseTask}
-            disabled={loading || isMember}
+            disabled={loading || userIsMember}
           />
 
-          {isMember && (
+          {userIsMember && (
             <p className="text-xs font-bold uppercase text-black/60">
               Member accounts can only assign tasks to themselves.
             </p>

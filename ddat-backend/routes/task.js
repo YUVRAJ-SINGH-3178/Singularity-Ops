@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const Task = require("../models/Task");
 const User = require("../models/User");
 const { LABS } = require("../config/labs");
+const { APP_ORGANIZATION } = require("../config/app");
+const { requireAuth } = require("../middleware/auth");
 const {
   SYSTEM_DECISION_WALLET,
   rejectExpiredOpenTasks,
@@ -21,6 +23,8 @@ const TASK_AUTO_REJECT_HOURS = Math.max(
   1,
   parseInt(process.env.TASK_AUTO_REJECT_HOURS, 10) || 24,
 );
+
+router.use(requireAuth);
 
 function normalizeRole(inputRole) {
   const value = String(inputRole || "")
@@ -156,22 +160,16 @@ router.get("/labs/list", (req, res) => {
 
 /**
  * GET /api/tasks
- * Query params: wallet, organization, labKey, status
+ * Query params: wallet, labKey, status
  */
 router.get("/", async (req, res) => {
   try {
-    const {
-      wallet,
-      organization,
-      labKey,
-      status,
-      autoFinalize = "1",
-    } = req.query;
-    const query = {};
-
-    if (organization) {
-      query.organization = String(organization).trim();
-    }
+    const { wallet, labKey, status, autoFinalize = "1" } = req.query;
+    const authWallet = req.auth.walletAddress;
+    let normalizedWallet = "";
+    const query = {
+      organization: APP_ORGANIZATION,
+    };
 
     if (labKey) {
       query.labKey = String(labKey).trim();
@@ -182,7 +180,12 @@ router.get("/", async (req, res) => {
     }
 
     if (wallet && typeof wallet === "string") {
-      const normalizedWallet = wallet.toLowerCase();
+      normalizedWallet = wallet.toLowerCase().trim();
+      if (normalizedWallet !== authWallet) {
+        return res
+          .status(403)
+          .json({ success: false, error: "Wallet mismatch" });
+      }
       query.$or = [
         { createdByWallet: normalizedWallet },
         { assignedToWallet: normalizedWallet },
@@ -191,6 +194,40 @@ router.get("/", async (req, res) => {
 
     await rejectExpiredOpenTasks();
     let tasks = await Task.find(query).sort({ createdAt: -1 });
+
+    // Backward compatibility: migrate legacy wallet tasks into Singularity scope
+    // so previously created tasks keep showing up after organization hardening.
+    if (normalizedWallet && tasks.length === 0) {
+      const legacyQuery = {
+        organization: { $ne: APP_ORGANIZATION },
+        $or: [
+          { createdByWallet: normalizedWallet },
+          { assignedToWallet: normalizedWallet },
+        ],
+      };
+
+      if (labKey) {
+        legacyQuery.labKey = String(labKey).trim();
+      }
+
+      if (status) {
+        legacyQuery.status = String(status).trim();
+      }
+
+      const legacyTasks = await Task.find(legacyQuery).sort({ createdAt: -1 });
+      if (legacyTasks.length > 0) {
+        const legacyIds = legacyTasks.map((task) => task._id);
+        await Task.updateMany(
+          { _id: { $in: legacyIds } },
+          { $set: { organization: APP_ORGANIZATION } },
+        );
+
+        tasks = legacyTasks.map((task) => {
+          task.organization = APP_ORGANIZATION;
+          return task;
+        });
+      }
+    }
 
     if (String(autoFinalize) !== "0") {
       const inReviewTasks = tasks.filter((task) => task.status === "in_review");
@@ -218,31 +255,28 @@ router.post("/", async (req, res) => {
     const {
       title,
       description = "",
-      organization,
       labKey,
       source = "employee",
-      createdByWallet,
       assignedToWallet = "",
       workDate,
       endDate,
     } = req.body || {};
 
-    if (!title || !organization || !labKey || !createdByWallet || !workDate) {
+    const createdByWallet = req.auth.walletAddress;
+
+    if (!title || !labKey || !workDate) {
       return res.status(400).json({
         success: false,
-        error:
-          "Missing fields: title, organization, labKey, createdByWallet, workDate",
+        error: "Missing fields: title, labKey, workDate",
       });
     }
 
     const normalizedSource = String(source).toLowerCase();
     if (!["enterprise", "employee"].includes(normalizedSource)) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "source must be enterprise or employee",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "source must be enterprise or employee",
+      });
     }
 
     if (!isValidDate(workDate)) {
@@ -263,12 +297,10 @@ router.post("/", async (req, res) => {
 
     const parsedWorkDate = parseTaskDate(workDate);
     if (parsedEndDate && parsedEndDate < parsedWorkDate) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "endDate cannot be earlier than workDate",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "endDate cannot be earlier than workDate",
+      });
     }
 
     const durationDays = parsedEndDate
@@ -296,24 +328,20 @@ router.post("/", async (req, res) => {
 
     if (creatorRole === "member") {
       if (normalizedSource === "enterprise") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Members can only create employee tasks",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "Members can only create employee tasks",
+        });
       }
 
       if (
         normalizedAssignedWallet &&
         normalizedAssignedWallet !== normalizedCreatorWallet
       ) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Members can only assign tasks to themselves",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "Members can only assign tasks to themselves",
+        });
       }
     }
 
@@ -325,7 +353,7 @@ router.post("/", async (req, res) => {
     const task = await Task.create({
       title: String(title).trim(),
       description: String(description || "").trim(),
-      organization: String(organization).trim(),
+      organization: APP_ORGANIZATION,
       labKey: normalizedLabKey,
       source: normalizedSource,
       createdByWallet: normalizedCreatorWallet,
@@ -349,23 +377,13 @@ router.post("/", async (req, res) => {
 router.post("/:taskId/submit", async (req, res) => {
   try {
     const { taskId } = req.params;
-    const {
-      walletAddress,
-      submissionNote = "",
-      evidenceUrl = "",
-    } = req.body || {};
+    const { submissionNote = "", evidenceUrl = "" } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(taskId)) {
       return res.status(400).json({ success: false, error: "Invalid task id" });
     }
 
-    if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ success: false, error: "walletAddress is required" });
-    }
-
-    const normalizedWallet = String(walletAddress).toLowerCase().trim();
+    const normalizedWallet = req.auth.walletAddress;
     const task = await Task.findById(taskId);
 
     if (!task) {
@@ -393,12 +411,10 @@ router.post("/:taskId/submit", async (req, res) => {
     const isCreator = task.createdByWallet === normalizedWallet;
 
     if (!isAssignee && !isCreator) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Only assignee or creator can submit work",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Only assignee or creator can submit work",
+      });
     }
 
     if (!["open", "rejected"].includes(task.status)) {
@@ -410,6 +426,7 @@ router.post("/:taskId/submit", async (req, res) => {
     task.submissionNote = String(submissionNote || "").trim();
     task.evidenceUrl = String(evidenceUrl || "").trim();
     task.status = "in_review";
+    task.reviewStartedAt = now;
     task.voteYes = 0;
     task.voteNo = 0;
     task.votedBy = [];
@@ -434,7 +451,7 @@ router.post("/:taskId/submit", async (req, res) => {
 router.post("/:taskId/vote", async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { walletAddress, vote, voterRole = "member" } = req.body || {};
+    const { vote } = req.body || {};
 
     if (!mongoose.Types.ObjectId.isValid(taskId)) {
       return res.status(400).json({ success: false, error: "Invalid task id" });
@@ -449,13 +466,7 @@ router.post("/:taskId/vote", async (req, res) => {
         .json({ success: false, error: "vote must be yes or no" });
     }
 
-    if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ success: false, error: "walletAddress is required" });
-    }
-
-    const normalizedWallet = String(walletAddress).toLowerCase().trim();
+    const normalizedWallet = req.auth.walletAddress;
     const task = await Task.findById(taskId);
 
     if (!task) {
@@ -470,12 +481,10 @@ router.post("/:taskId/vote", async (req, res) => {
 
     // Block voting only if you're the one who submitted the work (i.e., you are the assignee)
     if (task.assignedToWallet && task.assignedToWallet === normalizedWallet) {
-      return res
-        .status(400)
-        .json({
-          success: false,
-          error: "You cannot vote on your own submitted work",
-        });
+      return res.status(400).json({
+        success: false,
+        error: "You cannot vote on your own submitted work",
+      });
     }
 
     if (task.votedBy.includes(normalizedWallet)) {
@@ -484,7 +493,8 @@ router.post("/:taskId/vote", async (req, res) => {
         .json({ success: false, error: "You already voted on this task" });
     }
 
-    const normalizedRole = normalizeRole(voterRole);
+    const voter = await User.findOne({ walletAddress: normalizedWallet });
+    const normalizedRole = normalizeRole(voter?.role);
     const voterRolesForTask =
       task.source === "enterprise" ? ["executive"] : ["affiliate", "executive"];
 
@@ -493,21 +503,17 @@ router.post("/:taskId/vote", async (req, res) => {
     // Employee tasks: executives and affiliates can vote
     if (task.source === "enterprise") {
       if (normalizedRole !== "executive") {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Only executives can vote on enterprise tasks",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "Only executives can vote on enterprise tasks",
+        });
       }
     } else {
       if (!["affiliate", "executive"].includes(normalizedRole)) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            error: "Only affiliates or executives can vote on employee tasks",
-          });
+        return res.status(403).json({
+          success: false,
+          error: "Only affiliates or executives can vote on employee tasks",
+        });
       }
     }
 
@@ -581,12 +587,7 @@ router.post("/:taskId/vote", async (req, res) => {
  */
 router.post("/finalize-in-review", async (req, res) => {
   try {
-    const { walletAddress } = req.body || {};
-    if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ success: false, error: "walletAddress is required" });
-    }
+    const walletAddress = req.auth.walletAddress;
 
     const actor = await User.findOne({
       walletAddress: String(walletAddress).toLowerCase().trim(),
@@ -595,18 +596,16 @@ router.post("/finalize-in-review", async (req, res) => {
       !actor ||
       !["affiliate", "executive"].includes(normalizeRole(actor.role))
     ) {
-      return res
-        .status(403)
-        .json({
-          success: false,
-          error: "Only affiliates or executives can finalize tasks",
-        });
+      return res.status(403).json({
+        success: false,
+        error: "Only affiliates or executives can finalize tasks",
+      });
     }
 
-    const query = { status: "in_review" };
-    if (actor.organization) {
-      query.organization = String(actor.organization).trim();
-    }
+    const query = {
+      status: "in_review",
+      organization: APP_ORGANIZATION,
+    };
 
     const tasks = await Task.find(query);
     const finalized = [];

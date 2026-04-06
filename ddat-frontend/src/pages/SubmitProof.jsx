@@ -1,13 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { apiRequest } from "../lib/apiClient";
-
-function normalizeRole(role) {
-  const value = String(role || "").toLowerCase();
-  if (value === "employee") return "member";
-  if (value === "enterprise_admin") return "executive";
-  if (["member", "affiliate", "executive"].includes(value)) return value;
-  return "member";
-}
+import { normalizeRole } from "../lib/roleUtils";
+import { listTasksByWallet, submitTask } from "../lib/taskApi";
+import { getUserProfile } from "../lib/userApi";
 
 export default function SubmitProof({ wallet }) {
   const [profile, setProfile] = useState(null);
@@ -23,12 +17,12 @@ export default function SubmitProof({ wallet }) {
 
     const loadData = async () => {
       try {
-        const profilePayload = await apiRequest(`/user/${wallet}/profile`);
+        const profilePayload = await getUserProfile(wallet);
         if (profilePayload.success) {
           setProfile(profilePayload.data);
         }
 
-        const taskPayload = await apiRequest(`/tasks?wallet=${wallet}`);
+        const taskPayload = await listTasksByWallet(wallet);
         if (taskPayload.success) {
           setTasks(taskPayload.data || []);
         }
@@ -41,7 +35,7 @@ export default function SubmitProof({ wallet }) {
   }, [wallet]);
 
   const submittable = useMemo(() => {
-    return tasks.filter((task) => ["open", "rejected"].includes(task.status));
+    return tasks.filter((task) => task.status === "open");
   }, [tasks]);
 
   const handleSubmit = async (e) => {
@@ -60,23 +54,25 @@ export default function SubmitProof({ wallet }) {
     setStatus({ type: "", message: "" });
 
     try {
-      await apiRequest(`/tasks/${selectedTask}/submit`, {
-        method: "POST",
-        body: JSON.stringify({
-          walletAddress: wallet,
-          submissionNote,
-          evidenceUrl,
-        }),
+      await submitTask(selectedTask, {
+        submissionNote,
+        evidenceUrl,
       });
 
-      setStatus({ type: "success", message: "Work submitted for enterprise review." });
+      setStatus({
+        type: "success",
+        message: "Work submitted for enterprise review.",
+      });
       setSubmissionNote("");
       setEvidenceUrl("");
 
-      const taskPayload = await apiRequest(`/tasks?wallet=${wallet}`);
+      const taskPayload = await listTasksByWallet(wallet);
       if (taskPayload.success) setTasks(taskPayload.data || []);
     } catch (err) {
-      setStatus({ type: "error", message: err.message || "Submission failed." });
+      setStatus({
+        type: "error",
+        message: err.message || "Submission failed.",
+      });
     } finally {
       setLoading(false);
     }
@@ -86,8 +82,12 @@ export default function SubmitProof({ wallet }) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[70vh] text-center px-4">
         <div className="neo-card p-12 max-w-md w-full">
-          <h1 className="text-4xl font-black tracking-tight mb-4 uppercase">Connect Wallet</h1>
-          <p className="text-black/70 font-medium mb-8">Connect your wallet to submit completed work.</p>
+          <h1 className="text-4xl font-black tracking-tight mb-4 uppercase">
+            Connect Wallet
+          </h1>
+          <p className="text-black/70 font-medium mb-8">
+            Connect your wallet to submit completed work.
+          </p>
         </div>
       </div>
     );
@@ -109,13 +109,16 @@ export default function SubmitProof({ wallet }) {
       <div className="bg-white border-x-2 border-b-2 border-black rounded-b-2xl p-8 shadow-hard relative z-0 -mt-2">
         <div className="mb-4 bg-[#f4f4f5] border-2 border-black rounded-lg p-3">
           <p className="font-bold text-sm uppercase text-black/70">
-            Role: {normalizeRole(profile?.role)} • Org: {profile?.organization || "Not set"}
+            Role: {normalizeRole(profile?.role)} • Org:{" "}
+            {profile?.organization || "Not set"}
           </p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">Task</label>
+            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
+              Task
+            </label>
             <select
               value={selectedTask}
               onChange={(e) => setSelectedTask(e.target.value)}
@@ -130,12 +133,16 @@ export default function SubmitProof({ wallet }) {
               ))}
             </select>
             {submittable.length === 0 && (
-              <p className="text-xs font-bold uppercase text-[#ff5f57] mt-2">No open tasks available for submission.</p>
+              <p className="text-xs font-bold uppercase text-[#ff5f57] mt-2">
+                No open tasks available for submission.
+              </p>
             )}
           </div>
 
           <div>
-            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">Submission Note</label>
+            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
+              Submission Note
+            </label>
             <textarea
               value={submissionNote}
               onChange={(e) => setSubmissionNote(e.target.value)}
@@ -147,7 +154,9 @@ export default function SubmitProof({ wallet }) {
           </div>
 
           <div>
-            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">Evidence URL (Optional)</label>
+            <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
+              Evidence URL (Optional)
+            </label>
             <input
               type="url"
               value={evidenceUrl}
@@ -159,12 +168,20 @@ export default function SubmitProof({ wallet }) {
           </div>
 
           {status.message && (
-            <div className={`border-2 border-black rounded-lg p-3 shadow-hard ${status.type === "error" ? "bg-[#ff5f57] text-white" : "bg-[var(--color-sage)] text-black"}`}>
-              <p className="font-bold uppercase text-xs tracking-wide">{status.message}</p>
+            <div
+              className={`border-2 border-black rounded-lg p-3 shadow-hard ${status.type === "error" ? "bg-[#ff5f57] text-white" : "bg-[var(--color-sage)] text-black"}`}
+            >
+              <p className="font-bold uppercase text-xs tracking-wide">
+                {status.message}
+              </p>
             </div>
           )}
 
-          <button type="submit" disabled={loading} className="neo-btn neo-btn-sage w-full justify-center py-4 text-lg translate-push mt-1">
+          <button
+            type="submit"
+            disabled={loading}
+            className="neo-btn neo-btn-sage w-full justify-center py-4 text-lg translate-push mt-1"
+          >
             {loading ? "Submitting..." : "Send For Voting"}
           </button>
         </form>

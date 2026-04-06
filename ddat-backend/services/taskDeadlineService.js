@@ -22,8 +22,23 @@ function buildExpiredOpenTasksQuery(now = new Date()) {
   };
 }
 
+function buildExpiredInReviewTasksQuery(now = new Date()) {
+  const cutoff = getAutoRejectCutoff(now);
+
+  return {
+    status: "in_review",
+    $or: [
+      { reviewStartedAt: { $lt: cutoff } },
+      {
+        reviewStartedAt: { $in: [null, undefined] },
+        createdAt: { $lt: cutoff },
+      },
+    ],
+  };
+}
+
 async function rejectExpiredOpenTasks(now = new Date()) {
-  const result = await Task.updateMany(buildExpiredOpenTasksQuery(now), {
+  const openResult = await Task.updateMany(buildExpiredOpenTasksQuery(now), {
     $set: {
       status: "rejected",
       decidedByWallet: SYSTEM_DECISION_WALLET,
@@ -31,7 +46,18 @@ async function rejectExpiredOpenTasks(now = new Date()) {
     },
   });
 
-  return result.modifiedCount || 0;
+  const inReviewResult = await Task.updateMany(
+    buildExpiredInReviewTasksQuery(now),
+    {
+      $set: {
+        status: "rejected",
+        decidedByWallet: SYSTEM_DECISION_WALLET,
+        resolvedAt: now,
+      },
+    },
+  );
+
+  return (openResult.modifiedCount || 0) + (inReviewResult.modifiedCount || 0);
 }
 
 function startTaskDeadlineWatcher(options = {}) {
