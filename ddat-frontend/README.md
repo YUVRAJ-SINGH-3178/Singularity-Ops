@@ -1,43 +1,31 @@
-# DDAT Frontend
+# Singularity Ops Frontend
 
-React + Vite frontend for DDAT.
+This is the React + Vite frontend for Singularity Ops.
 
-## Local Development
-
-1. Install dependencies:
+## Development
 
 ```bash
 npm install
-```
-
-2. Configure environment:
-
-```bash
 cp .env.example .env
-```
-
-3. For local backend keep:
-
-```env
-VITE_API_BASE=/api
-VITE_CONTRACT_ADDRESS=0xYourDeployedContractAddress
-```
-
-4. Start dev server:
-
-```bash
 npm run dev
 ```
 
-The Vite proxy in `vite.config.js` forwards `/api` to `http://localhost:5000`.
+For local development, keep:
 
-## Hosted Deployment (Expo Demo)
+```env
+VITE_API_BASE=/api
+VITE_APP_ORGANIZATION=Singularity Lab
+```
 
-Set these environment variables in your frontend host (Vercel/Netlify):
+The Vite proxy forwards `/api` to the local backend.
+
+## Hosted Deployment
+
+Set the frontend environment variables in your host:
 
 ```env
 VITE_API_BASE=https://your-backend-domain/api
-VITE_CONTRACT_ADDRESS=0xYourDeployedContractAddress
+VITE_APP_ORGANIZATION=Singularity Lab
 ```
 
 Build command:
@@ -54,6 +42,6 @@ dist
 
 ## Notes
 
-- `VITE_API_BASE` must point to your deployed backend URL in hosted environments.
-- `VITE_CONTRACT_ADDRESS` must match the contract address configured in backend env.
-- Wallet network must match the deployed contract network (currently Sepolia).
+- `VITE_API_BASE` must point to the deployed backend in production.
+- `VITE_APP_ORGANIZATION` should match the backend organization name.
+- Wallet login requires MetaMask and the backend auth endpoints.
