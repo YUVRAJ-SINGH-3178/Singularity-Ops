@@ -49,16 +49,17 @@ export default function BurningLabCard({ index }) {
           Math.random() > 0.5
             ? "#ff6b35"
             : Math.random() > 0.5
-            ? "#ff4500"
-            : "#ffb347",
+              ? "#ff4500"
+              : "#ffb347",
       });
     }
     setParticles((prev) => [...prev, ...newParticles]);
 
-    const maxLife = Math.max(...newParticles.map((p) => p.duration + p.delay)) + 100;
+    const maxLife =
+      Math.max(...newParticles.map((p) => p.duration + p.delay)) + 100;
     const cleanupTimer = setTimeout(() => {
       setParticles((prev) =>
-        prev.filter((p) => !newParticles.find((np) => np.id === p.id))
+        prev.filter((p) => !newParticles.find((np) => np.id === p.id)),
       );
     }, maxLife);
     timerRefs.current.push(cleanupTimer);
@@ -100,17 +101,15 @@ export default function BurningLabCard({ index }) {
         setPhase("revealing");
         // Jump ahead by 3 so all 3 cards don't end up showing similar labs
         setCurrentIndex((prev) => (prev + 3) % LABS.length);
-        
+
         const idleTimer = setTimeout(() => {
           if (hoverRef.current) {
             setPhase("idle");
           }
         }, 800); // Give user enough time to read the new text
         timerRefs.current.push(idleTimer);
-
       }, totalBurnTime + REVEAL_DELAY);
       timerRefs.current.push(revealTimer);
-      
     }, 50);
     timerRefs.current.push(initTimer);
   }, [spawnParticles]);
@@ -135,7 +134,10 @@ export default function BurningLabCard({ index }) {
   // Continuously cycle if the mouse stays hovered after returning to 'idle'
   useEffect(() => {
     if (phase === "idle" && hoverRef.current) {
-      triggerBurnSequence();
+      const restartTimer = setTimeout(() => {
+        triggerBurnSequence();
+      }, 0);
+      return () => clearTimeout(restartTimer);
     }
   }, [phase, triggerBurnSequence]);
 
@@ -152,7 +154,9 @@ export default function BurningLabCard({ index }) {
           className={`burn-char ${isBurning ? "burning" : ""}`}
           style={{
             animationDelay: isBurning ? "0ms" : undefined,
-            animationDuration: isBurning ? `${CHAR_BURN_DURATION}ms` : undefined,
+            animationDuration: isBurning
+              ? `${CHAR_BURN_DURATION}ms`
+              : undefined,
           }}
         >
           {char === " " ? "\u00A0" : char}
