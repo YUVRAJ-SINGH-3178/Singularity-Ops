@@ -4,6 +4,7 @@ import { normalizeRole } from "../lib/roleUtils";
 import { finalizeInReview, listLabs, listTasksByWallet } from "../lib/taskApi";
 import { getUserProfile } from "../lib/userApi";
 import { APP_ORGANIZATION } from "../config";
+import BurningLabCard from "../components/BurningLabCard";
 
 function statusBadge(status) {
   if (status === "done") return "tag-settled";
@@ -120,15 +121,9 @@ export default function Dashboard({ wallet }) {
                 Singularity Labs
               </div>
               <div className="p-6 bg-[#f4f4f5] space-y-3">
-                <div className="neo-card p-4">
-                  Bhaskarcharya Lab • Web3 and Blockchain
-                </div>
-                <div className="neo-card p-4">
-                  Prajna Kritrima Lab • AI and Generative AI
-                </div>
-                <div className="neo-card p-4">
-                  Varahamihira Lab • Cloud and Cybersecurity
-                </div>
+                <BurningLabCard index={0} />
+                <BurningLabCard index={1} />
+                <BurningLabCard index={2} />
               </div>
             </div>
           </div>
