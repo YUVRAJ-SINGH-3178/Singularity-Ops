@@ -68,7 +68,10 @@ export default function CreateCommitment({ wallet }) {
           }
         }
       } catch (err) {
-        console.error(err);
+        setStatus({
+          type: "error",
+          message: err.message || "Failed to load labs/profile metadata.",
+        });
       }
     };
 

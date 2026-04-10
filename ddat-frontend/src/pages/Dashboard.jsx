@@ -26,12 +26,14 @@ export default function Dashboard({ wallet }) {
     if (!wallet) return;
 
     let mounted = true;
+    let finalizedOnce = false;
 
-    const loadWorkspace = async () => {
+    const loadWorkspace = async ({ runFinalize = false } = {}) => {
       setLoading(true);
       try {
-        if (wallet) {
+        if (runFinalize && wallet && !finalizedOnce) {
           await finalizeInReview().catch(() => {});
+          finalizedOnce = true;
         }
 
         const [labsPayload, profilePayload] = await Promise.all([
@@ -47,7 +49,10 @@ export default function Dashboard({ wallet }) {
           setProfileLoaded(true);
         }
 
-        const taskPayload = await listTasksByWallet(wallet);
+        const taskPayload = await listTasksByWallet(wallet, {
+          page: 1,
+          pageSize: 50,
+        });
 
         if (!mounted) return;
 
@@ -67,8 +72,10 @@ export default function Dashboard({ wallet }) {
       }
     };
 
-    loadWorkspace();
-    const t = setInterval(loadWorkspace, 5000);
+    loadWorkspace({ runFinalize: true });
+    const t = setInterval(() => {
+      loadWorkspace();
+    }, 20000);
 
     return () => {
       mounted = false;

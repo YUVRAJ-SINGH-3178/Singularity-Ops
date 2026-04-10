@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { canVote, normalizeRole } from "../lib/roleUtils";
 import {
   finalizeInReview,
@@ -8,6 +8,20 @@ import {
 } from "../lib/taskApi";
 import { getUserProfile } from "../lib/userApi";
 
+function toSafeHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "";
+    }
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
 export default function ProofFeed({ wallet }) {
   const [profile, setProfile] = useState(null);
   const [labs, setLabs] = useState([]);
@@ -15,10 +29,15 @@ export default function ProofFeed({ wallet }) {
   const [loading, setLoading] = useState(true);
   const [submittingVoteFor, setSubmittingVoteFor] = useState("");
   const [message, setMessage] = useState({ type: "", text: "" });
+  const lastFinalizeAtRef = useRef(0);
 
   const loadQueue = async (walletAddress) => {
     try {
-      await finalizeInReview().catch(() => {});
+      const now = Date.now();
+      if (now - lastFinalizeAtRef.current > 60_000) {
+        await finalizeInReview().catch(() => {});
+        lastFinalizeAtRef.current = now;
+      }
 
       const [profilePayload, labsPayload] = await Promise.all([
         getUserProfile(walletAddress),
@@ -29,7 +48,10 @@ export default function ProofFeed({ wallet }) {
       if (labsPayload.success) setLabs(labsPayload.data || []);
 
       const organization = profilePayload?.data?.organization;
-      const queuePayload = await listInReviewTasksByOrganization(organization);
+      const queuePayload = await listInReviewTasksByOrganization(organization, {
+        page: 1,
+        pageSize: 50,
+      });
       if (queuePayload.success) setTasks(queuePayload.data || []);
     } catch (err) {
       console.error(err);
@@ -48,7 +70,7 @@ export default function ProofFeed({ wallet }) {
 
     const poll = setInterval(() => {
       loadQueue(wallet);
-    }, 5000);
+    }, 20000);
 
     return () => clearInterval(poll);
   }, [wallet]);
@@ -154,6 +176,7 @@ export default function ProofFeed({ wallet }) {
           const ratio = total > 0 ? (task.voteYes / total) * 100 : 0;
           const lab = labs.find((entry) => entry.key === task.labKey);
           const isSubmitting = submittingVoteFor === task._id;
+          const safeEvidenceUrl = toSafeHttpUrl(task.evidenceUrl);
 
           return (
             <div
@@ -177,9 +200,9 @@ export default function ProofFeed({ wallet }) {
                   <div className="mt-1 text-xs font-bold uppercase text-black/55 break-all">
                     Assignee: {task.assignedToWallet || "Self-owned"}
                   </div>
-                  {task.evidenceUrl && (
+                  {safeEvidenceUrl && (
                     <a
-                      href={task.evidenceUrl}
+                      href={safeEvidenceUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="mt-4 inline-block neo-btn neo-btn-white translate-push"

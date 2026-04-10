@@ -47,4 +47,6 @@ const commitmentSchema = new mongoose.Schema({
   },
 });
 
+commitmentSchema.index({ walletAddress: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Commitment", commitmentSchema);

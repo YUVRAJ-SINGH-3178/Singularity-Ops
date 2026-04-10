@@ -5,10 +5,7 @@ const User = require("../models/User");
 const { LABS } = require("../config/labs");
 const { APP_ORGANIZATION } = require("../config/app");
 const { requireAuth } = require("../middleware/auth");
-const {
-  SYSTEM_DECISION_WALLET,
-  rejectExpiredOpenTasks,
-} = require("../services/taskDeadlineService");
+const { SYSTEM_DECISION_WALLET } = require("../services/taskDeadlineService");
 
 const router = express.Router();
 
@@ -23,6 +20,9 @@ const TASK_AUTO_REJECT_HOURS = Math.max(
   1,
   parseInt(process.env.TASK_AUTO_REJECT_HOURS, 10) || 24,
 );
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
 
 router.use(requireAuth);
 
@@ -55,6 +55,34 @@ function parseTaskDate(value) {
   }
 
   return new Date(raw);
+}
+
+function parsePagination(query) {
+  const page = Math.max(DEFAULT_PAGE, Number(query?.page) || DEFAULT_PAGE);
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(query?.pageSize) || DEFAULT_PAGE_SIZE),
+  );
+  const skip = (page - 1) * pageSize;
+  return { page, pageSize, skip };
+}
+
+function normalizeEvidenceUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error("Evidence URL must be a valid absolute URL");
+  }
+
+  if (!["https:", "http:"].includes(parsed.protocol)) {
+    throw new Error("Evidence URL must use http or https");
+  }
+
+  return parsed.toString();
 }
 
 function getTaskDeadline(task) {
@@ -164,7 +192,8 @@ router.get("/labs/list", (req, res) => {
  */
 router.get("/", async (req, res) => {
   try {
-    const { wallet, labKey, status, autoFinalize = "1" } = req.query;
+    const { wallet, labKey, status } = req.query;
+    const { page, pageSize, skip } = parsePagination(req.query);
     const authWallet = req.auth.walletAddress;
     let normalizedWallet = "";
     const query = {
@@ -192,8 +221,11 @@ router.get("/", async (req, res) => {
       ];
     }
 
-    await rejectExpiredOpenTasks();
-    let tasks = await Task.find(query).sort({ createdAt: -1 });
+    const total = await Task.countDocuments(query);
+    let tasks = await Task.find(query)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(pageSize);
 
     // Backward compatibility: migrate legacy wallet tasks into Singularity scope
     // so previously created tasks keep showing up after organization hardening.
@@ -229,17 +261,16 @@ router.get("/", async (req, res) => {
       }
     }
 
-    if (String(autoFinalize) !== "0") {
-      const inReviewTasks = tasks.filter((task) => task.status === "in_review");
-      if (inReviewTasks.length > 0) {
-        for (const task of inReviewTasks) {
-          await finalizeTaskIfReady(task);
-        }
-        tasks = await Task.find(query).sort({ createdAt: -1 });
-      }
-    }
-
-    res.json({ success: true, data: tasks });
+    res.json({
+      success: true,
+      data: tasks,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        hasMore: skip + tasks.length < total,
+      },
+    });
   } catch (err) {
     console.error("Error fetching tasks:", err);
     res.status(500).json({ success: false, error: "Failed to fetch tasks" });
@@ -423,8 +454,18 @@ router.post("/:taskId/submit", async (req, res) => {
         .json({ success: false, error: "Task is not open for submission" });
     }
 
+    let normalizedEvidenceUrl = "";
+    try {
+      normalizedEvidenceUrl = normalizeEvidenceUrl(evidenceUrl);
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: error.message,
+      });
+    }
+
     task.submissionNote = String(submissionNote || "").trim();
-    task.evidenceUrl = String(evidenceUrl || "").trim();
+    task.evidenceUrl = normalizedEvidenceUrl;
     task.status = "in_review";
     task.reviewStartedAt = now;
     task.voteYes = 0;

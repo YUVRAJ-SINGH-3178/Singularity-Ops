@@ -2,6 +2,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const request = require("supertest");
 const { ethers } = require("ethers");
+
+process.env.AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET || "test_auth_secret";
+
 const { createApp } = require("../server");
 const User = require("../models/User");
 const Task = require("../models/Task");

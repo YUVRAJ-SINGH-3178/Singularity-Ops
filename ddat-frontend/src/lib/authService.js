@@ -35,22 +35,48 @@ export async function establishWalletSession(walletAddress) {
     throw new Error("MetaMask not found");
   }
 
-  const noncePayload = await requestNonce(walletAddress);
-  const message = noncePayload?.data?.message;
-  if (!message) {
-    throw new Error("Failed to create auth challenge");
+  let noncePayload;
+  try {
+    noncePayload = await requestNonce(walletAddress);
+  } catch (err) {
+    throw new Error(
+      `Failed to request auth challenge: ${err.message || "Unknown error"}`,
+    );
   }
 
-  const signature = await window.ethereum.request({
-    method: "personal_sign",
-    params: [message, walletAddress],
-  });
+  const message = noncePayload?.data?.message;
+  if (!message) {
+    throw new Error(
+      `Auth challenge failed. Server response: ${JSON.stringify(noncePayload)}`,
+    );
+  }
 
-  const verifyPayload = await verifySignature(walletAddress, signature);
+  let signature;
+  try {
+    signature = await window.ethereum.request({
+      method: "personal_sign",
+      params: [message, walletAddress],
+    });
+  } catch (err) {
+    throw new Error(
+      `Message signature rejected or failed: ${err.message || "User denied request"}`,
+    );
+  }
+
+  let verifyPayload;
+  try {
+    verifyPayload = await verifySignature(walletAddress, signature);
+  } catch (err) {
+    throw new Error(
+      `Signature verification failed: ${err.message || "Unknown error"}`,
+    );
+  }
+
   const token = verifyPayload?.data?.token;
-
   if (!token) {
-    throw new Error("Authentication failed");
+    throw new Error(
+      `Authentication failed. Server response: ${JSON.stringify(verifyPayload)}`,
+    );
   }
 
   setStoredAuthToken(token);

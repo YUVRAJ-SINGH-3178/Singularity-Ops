@@ -1,19 +1,22 @@
 const express = require("express");
 const router = express.Router();
 const mongoose = require("mongoose");
-const { ethers } = require("ethers");
 const Proof = require("../models/Proof");
 const Commitment = require("../models/Commitment");
 const { settleCommitment } = require("../services/contractService");
+const { requireAuth } = require("../middleware/auth");
 
 // Minimum total votes before the threshold check kicks in
 const VOTE_THRESHOLD = parseInt(process.env.VOTE_THRESHOLD, 10) || 5;
+
+router.use(requireAuth);
 
 // ─── POST /api/vote/:proofId — Cast a vote on a proof ───────────────────────
 router.post("/:proofId", async (req, res) => {
   try {
     const { proofId } = req.params;
-    const { walletAddress, vote } = req.body;
+    const { vote } = req.body;
+    const walletAddress = req.auth.walletAddress;
 
     if (!mongoose.Types.ObjectId.isValid(proofId)) {
       return res.status(400).json({
@@ -26,14 +29,7 @@ router.post("/:proofId", async (req, res) => {
     if (!walletAddress || !vote) {
       return res.status(400).json({
         success: false,
-        error: "Missing required fields: walletAddress, vote (yes/no)",
-      });
-    }
-
-    if (!ethers.isAddress(walletAddress)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid wallet address",
+        error: "Missing required fields: vote (yes/no)",
       });
     }
 
@@ -113,7 +109,8 @@ router.post("/:proofId", async (req, res) => {
       await proof.save();
 
       if (proofAccepted) {
-        commitment.acceptedProofCount = (commitment.acceptedProofCount || 0) + 1;
+        commitment.acceptedProofCount =
+          (commitment.acceptedProofCount || 0) + 1;
 
         if (commitment.acceptedProofCount >= commitment.durationDays) {
           commitment.status = "settled_success";
@@ -135,30 +132,28 @@ router.post("/:proofId", async (req, res) => {
       ) {
         try {
           console.log(
-            `\n🗳️  Vote threshold reached for commitment ${commitment._id}`
+            `\n🗳️  Vote threshold reached for commitment ${commitment._id}`,
           );
           console.log(
-            `   Votes: ${proof.voteYes} yes / ${proof.voteNo} no (${yesPercentage.toFixed(1)}% yes)`
+            `   Votes: ${proof.voteYes} yes / ${proof.voteNo} no (${yesPercentage.toFixed(1)}% yes)`,
           );
-          console.log(
-            `   Result: ${thresholdResult} → settling on-chain...\n`
-          );
+          console.log(`   Result: ${thresholdResult} → settling on-chain...\n`);
 
           onChainTx = await settleCommitment(
             commitment.contractCommitmentId,
-            commitment.status === "settled_success"
+            commitment.status === "settled_success",
           );
         } catch (chainError) {
           // Log but don't fail the vote — the DB status is already updated
           console.error(
             "⚠️  On-chain settlement failed (vote was still recorded):",
-            chainError.message
+            chainError.message,
           );
           onChainTx = { error: chainError.message };
         }
       } else {
         console.log(
-          `⚠️  Threshold reached but no contractCommitmentId set — skipping on-chain settlement`
+          `⚠️  Threshold reached but no contractCommitmentId set — skipping on-chain settlement`,
         );
       }
     }
@@ -183,7 +178,7 @@ router.post("/:proofId", async (req, res) => {
     console.error("Error casting vote:", error.message);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: "Failed to cast vote",
     });
   }
 });

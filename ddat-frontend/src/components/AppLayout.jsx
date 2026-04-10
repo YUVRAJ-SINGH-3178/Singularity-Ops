@@ -140,17 +140,24 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
     }
 
     try {
+      console.log("[Wallet] Requesting accounts from MetaMask...");
       const accs = await window.ethereum.request({
         method: "eth_requestAccounts",
       });
       const walletAddress = accs[0];
+
+      console.log(
+        `[Wallet] Got account: ${walletAddress}, establishing session...`,
+      );
       await establishWalletSession(walletAddress);
+
+      console.log("[Wallet] Session established successfully");
       localStorage.removeItem(WALLET_DISCONNECTED_KEY);
       localStorage.removeItem(WALLET_AUTO_CONNECT_BLOCKED_KEY);
       setWallet(walletAddress);
       setNotice(null);
     } catch (err) {
-      console.error("Wallet connection failed:", err);
+      console.error("[Wallet] Connection failed:", err.message, err);
       showNotice(err?.message || "Wallet connection failed. Please try again.");
     }
   };
@@ -186,10 +193,11 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
             <Link
               key={link.to}
               to={link.to}
-              className={`text-[15px] font-bold transition-all border-b-2 ${pathname === link.to
+              className={`text-[15px] font-bold transition-all border-b-2 ${
+                pathname === link.to
                   ? "text-black border-black"
                   : "text-black/60 border-transparent hover:text-black"
-                }`}
+              }`}
             >
               {link.label}
             </Link>
@@ -270,10 +278,11 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
       {notice && (
         <div className="fixed top-20 left-0 w-full z-40 px-4 py-3">
           <div
-            className={`mx-auto max-w-3xl border-2 border-black rounded-lg px-4 py-3 shadow-hard flex items-center justify-between ${notice.type === "success"
+            className={`mx-auto max-w-3xl border-2 border-black rounded-lg px-4 py-3 shadow-hard flex items-center justify-between ${
+              notice.type === "success"
                 ? "bg-[var(--color-sage)] text-black"
                 : "bg-[#ff5f57] text-white"
-              }`}
+            }`}
           >
             <p className="font-bold uppercase text-sm tracking-wide">
               {notice.message}
@@ -297,10 +306,11 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
           <Link
             key={link.to}
             to={link.to}
-            className={`text-xs font-bold uppercase tracking-wider px-3 py-2 border-2 ${pathname === link.to
+            className={`text-xs font-bold uppercase tracking-wider px-3 py-2 border-2 ${
+              pathname === link.to
                 ? "bg-black text-[var(--color-yellow)] border-black rounded-md shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-x-[-2px] translate-y-[-2px]"
                 : "text-black border-transparent"
-              }`}
+            }`}
           >
             {link.label}
           </Link>

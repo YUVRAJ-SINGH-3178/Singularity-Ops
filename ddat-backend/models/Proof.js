@@ -62,4 +62,7 @@ const proofSchema = new mongoose.Schema({
   },
 });
 
+proofSchema.index({ commitmentId: 1, status: 1, createdAt: -1 });
+proofSchema.index({ walletAddress: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Proof", proofSchema);

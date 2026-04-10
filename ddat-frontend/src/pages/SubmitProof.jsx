@@ -3,6 +3,17 @@ import { normalizeRole } from "../lib/roleUtils";
 import { listTasksByWallet, submitTask } from "../lib/taskApi";
 import { getUserProfile } from "../lib/userApi";
 
+function isValidHttpUrl(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return true;
+  try {
+    const parsed = new URL(raw);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
 export default function SubmitProof({ wallet }) {
   const [profile, setProfile] = useState(null);
   const [tasks, setTasks] = useState([]);
@@ -11,23 +22,33 @@ export default function SubmitProof({ wallet }) {
   const [evidenceUrl, setEvidenceUrl] = useState("");
   const [status, setStatus] = useState({ type: "", message: "" });
   const [loading, setLoading] = useState(false);
+  const [loadingMeta, setLoadingMeta] = useState(false);
 
   useEffect(() => {
     if (!wallet) return;
 
     const loadData = async () => {
+      setLoadingMeta(true);
       try {
         const profilePayload = await getUserProfile(wallet);
         if (profilePayload.success) {
           setProfile(profilePayload.data);
         }
 
-        const taskPayload = await listTasksByWallet(wallet);
+        const taskPayload = await listTasksByWallet(wallet, {
+          page: 1,
+          pageSize: 50,
+        });
         if (taskPayload.success) {
           setTasks(taskPayload.data || []);
         }
       } catch (err) {
-        console.error(err);
+        setStatus({
+          type: "error",
+          message: err.message || "Failed to load your profile or task list.",
+        });
+      } finally {
+        setLoadingMeta(false);
       }
     };
 
@@ -50,6 +71,14 @@ export default function SubmitProof({ wallet }) {
       return;
     }
 
+    if (!isValidHttpUrl(evidenceUrl)) {
+      setStatus({
+        type: "error",
+        message: "Evidence URL must be a valid http or https URL.",
+      });
+      return;
+    }
+
     setLoading(true);
     setStatus({ type: "", message: "" });
 
@@ -66,7 +95,10 @@ export default function SubmitProof({ wallet }) {
       setSubmissionNote("");
       setEvidenceUrl("");
 
-      const taskPayload = await listTasksByWallet(wallet);
+      const taskPayload = await listTasksByWallet(wallet, {
+        page: 1,
+        pageSize: 50,
+      });
       if (taskPayload.success) setTasks(taskPayload.data || []);
     } catch (err) {
       setStatus({
@@ -123,7 +155,7 @@ export default function SubmitProof({ wallet }) {
               value={selectedTask}
               onChange={(e) => setSelectedTask(e.target.value)}
               className="neo-input"
-              disabled={loading}
+              disabled={loading || loadingMeta}
             >
               <option value="">Select a task</option>
               {submittable.map((task) => (

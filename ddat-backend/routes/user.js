@@ -1,6 +1,5 @@
 const express = require("express");
 const Commitment = require("../models/Commitment");
-const Proof = require("../models/Proof");
 const User = require("../models/User");
 const { APP_ORGANIZATION } = require("../config/app");
 const { requireAuth } = require("../middleware/auth");
@@ -8,6 +7,10 @@ const { requireAuth } = require("../middleware/auth");
 const router = express.Router();
 
 router.use(requireAuth);
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_PAGE_SIZE = 50;
+const MAX_PAGE_SIZE = 100;
 
 function normalizeRole(inputRole) {
   const value = String(inputRole || "")
@@ -19,6 +22,20 @@ function normalizeRole(inputRole) {
   if (["member", "affiliate", "executive"].includes(value)) return value;
 
   return "member";
+}
+
+function escapeRegex(value) {
+  return String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function parsePagination(query) {
+  const page = Math.max(DEFAULT_PAGE, Number(query?.page) || DEFAULT_PAGE);
+  const pageSize = Math.min(
+    MAX_PAGE_SIZE,
+    Math.max(1, Number(query?.pageSize) || DEFAULT_PAGE_SIZE),
+  );
+  const skip = (page - 1) * pageSize;
+  return { page, pageSize, skip };
 }
 
 /**
@@ -204,8 +221,6 @@ router.get("/:wallet/activity", async (req, res) => {
     const commitments = await Commitment.find({
       walletAddress: normalizedWallet,
     }).sort({ createdAt: -1 });
-    const commitmentIds = commitments.map((c) => c._id);
-
     // Build activity array
     const activity = [];
 
@@ -233,11 +248,6 @@ router.get("/:wallet/activity", async (req, res) => {
       }
     });
 
-    // Find all proofs for these commitments
-    const proofs = await Proof.find({ commitmentId: { $in: commitmentIds } })
-      .populate("commitmentId", "goalText")
-      .sort({ createdAt: -1 });
-
     // Note: We only show commitment-related activity (ETH staking/return/forfeit)
     // Proof activities are not included in regular transaction history
 
@@ -261,6 +271,7 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
   try {
     const { labKey } = req.params;
     const { includeAll } = req.query;
+    const { page, pageSize, skip } = parsePagination(req.query);
 
     if (!labKey || typeof labKey !== "string") {
       return res
@@ -271,7 +282,9 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
     const normalizedLabKey = String(labKey).trim();
     const normalizedLabKeyLower = normalizedLabKey.toLowerCase();
     const membersByLab = await User.find({
-      labKey: { $regex: new RegExp(`^${normalizedLabKeyLower}$`, "i") },
+      labKey: {
+        $regex: new RegExp(`^${escapeRegex(normalizedLabKeyLower)}$`, "i"),
+      },
     }).sort({ displayName: 1 });
     let members = [...membersByLab];
 
@@ -304,7 +317,7 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
     if (requesterOrganization) {
       const membersByOrganization = await User.find({
         organization: {
-          $regex: new RegExp(`^${requesterOrganization}$`, "i"),
+          $regex: new RegExp(`^${escapeRegex(requesterOrganization)}$`, "i"),
         },
       }).sort({ displayName: 1 });
       const byWallet = new Map();
@@ -326,7 +339,10 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
       }).sort({ displayName: 1 });
     }
 
-    const data = members.map((user) => ({
+    const total = members.length;
+    const pagedMembers = members.slice(skip, skip + pageSize);
+
+    const data = pagedMembers.map((user) => ({
       walletAddress: user.walletAddress,
       displayName: user.displayName || user.walletAddress,
       email: user.email || "",
@@ -335,7 +351,16 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
       labKey: user.labKey,
     }));
 
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        hasMore: skip + data.length < total,
+      },
+    });
   } catch (err) {
     console.error("Error fetching lab members:", err);
     res
@@ -350,6 +375,7 @@ router.get("/members/by-lab/:labKey", async (req, res) => {
  */
 router.get("/role-requests/pending", async (req, res) => {
   try {
+    const { page, pageSize, skip } = parsePagination(req.query);
     const executive = await User.findOne({
       walletAddress: req.auth.walletAddress,
     });
@@ -365,10 +391,16 @@ router.get("/role-requests/pending", async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const requests = await User.find({
+    const requestsQuery = {
       requestedRole: { $ne: null },
       labKey: executiveLabKey,
-    }).sort({ requestedRoleAt: -1 });
+    };
+
+    const total = await User.countDocuments(requestsQuery);
+    const requests = await User.find(requestsQuery)
+      .sort({ requestedRoleAt: -1 })
+      .skip(skip)
+      .limit(pageSize);
 
     const data = requests.map((user) => ({
       walletAddress: user.walletAddress,
@@ -381,7 +413,16 @@ router.get("/role-requests/pending", async (req, res) => {
       labKey: user.labKey || "",
     }));
 
-    res.json({ success: true, data });
+    res.json({
+      success: true,
+      data,
+      pagination: {
+        page,
+        pageSize,
+        total,
+        hasMore: skip + data.length < total,
+      },
+    });
   } catch (err) {
     console.error("Error fetching role requests:", err);
     res

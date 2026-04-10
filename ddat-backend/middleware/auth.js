@@ -1,6 +1,10 @@
 const jwt = require("jsonwebtoken");
 
-const JWT_SECRET = process.env.AUTH_JWT_SECRET || "dev_only_change_me";
+const JWT_SECRET = String(process.env.AUTH_JWT_SECRET || "").trim();
+
+if (!JWT_SECRET) {
+  throw new Error("AUTH_JWT_SECRET is required and must not be empty");
+}
 
 function getTokenFromHeader(req) {
   const authHeader = String(req.headers.authorization || "");

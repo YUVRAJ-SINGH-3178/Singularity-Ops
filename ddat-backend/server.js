@@ -50,6 +50,33 @@ const authRoutes = require("./routes/auth");
 const PORT = process.env.PORT || 5000;
 const DB_RECONNECT_DELAY_MS = Number(process.env.DB_RECONNECT_DELAY_MS || 5000);
 
+function validateRuntimeConfig() {
+  const requiredVars = ["AUTH_JWT_SECRET", "MONGODB_URI"];
+  const missing = requiredVars.filter(
+    (name) => !String(process.env[name] || "").trim(),
+  );
+
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing required environment variables: ${missing.join(", ")}`,
+    );
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !String(process.env.CORS_ORIGINS || "").trim()
+  ) {
+    throw new Error("CORS_ORIGINS must be configured in production");
+  }
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    !String(process.env.ADMIN_API_KEY || "").trim()
+  ) {
+    throw new Error("ADMIN_API_KEY must be configured in production");
+  }
+}
+
 let dbConnectInProgress = false;
 
 function getDatabaseState() {
@@ -139,7 +166,9 @@ function createApp() {
             origin: corsOrigins,
             methods: ["GET", "POST", "DELETE", "OPTIONS"],
           }
-        : undefined,
+        : {
+            origin: false,
+          },
     ),
   );
   app.use(helmet());
@@ -230,6 +259,7 @@ function createApp() {
 
 // ─── Start server ───────────────────────────────────────────────────────────
 const startServer = async () => {
+  validateRuntimeConfig();
   const app = createApp();
 
   app.listen(PORT, () => {

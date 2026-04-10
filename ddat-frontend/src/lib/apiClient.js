@@ -76,6 +76,9 @@ export async function apiRequest(path, options = {}) {
     }
 
     if (error instanceof TypeError) {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        throw new Error("You appear to be offline. Reconnect to continue.");
+      }
       throw new Error(
         "Cannot reach backend API. Verify server is running and VITE_API_BASE is correct.",
       );

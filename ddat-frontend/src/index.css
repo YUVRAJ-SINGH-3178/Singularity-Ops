@@ -1,4 +1,4 @@
-@import url('https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@900,800,700,500,400&f[]=satoshi@900,700,500,400&display=swap');
+@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@900,800,700,500,400&f[]=satoshi@900,700,500,400&display=swap");
 @import "tailwindcss";
 
 :root {
@@ -15,7 +15,7 @@
 * {
   scroll-behavior: smooth;
   box-sizing: border-box;
-  font-family: 'Satoshi', sans-serif;
+  font-family: "Satoshi", sans-serif;
 }
 
 ::selection {
@@ -32,6 +32,10 @@ body {
   overflow-x: hidden;
 }
 
+body:has(.startup-loader) {
+  overflow: hidden;
+}
+
 button,
 a,
 input,
@@ -41,9 +45,17 @@ textarea {
 }
 
 /* ─── Typography ──────────────────────────────────────── */
-h1, h2, h3, h4, h5, h6, .font-heading {
-  font-family: 'Cabinet Grotesk', sans-serif;
-  color: var(--color-black); /* Default headings to black as they are mostly on white/yellow */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+.font-heading {
+  font-family: "Cabinet Grotesk", sans-serif;
+  color: var(
+    --color-black
+  ); /* Default headings to black as they are mostly on white/yellow */
 }
 
 h1 {
@@ -102,7 +114,7 @@ h3 {
 /* 32x32px radial dot pattern at 10% opacity on yellow backgrounds */
 .bg-yellow-dots {
   background-color: var(--color-yellow);
-  background-image: radial-gradient(rgba(0,0,0,0.1) 2px, transparent 2px);
+  background-image: radial-gradient(rgba(0, 0, 0, 0.1) 2px, transparent 2px);
   background-size: 32px 32px;
 }
 
@@ -129,7 +141,7 @@ h3 {
   border-radius: 8px;
   padding: 14px 18px;
   color: var(--color-black);
-  font-family: 'Satoshi', sans-serif;
+  font-family: "Satoshi", sans-serif;
   font-weight: 500;
   font-size: 15px;
   transition: box-shadow 0.2s;
@@ -149,7 +161,7 @@ h3 {
   background: #f4f4f5;
   color: #888888;
   cursor: not-allowed;
-  box-shadow: inset 2px 2px 0px 0px rgba(0,0,0,0.05);
+  box-shadow: inset 2px 2px 0px 0px rgba(0, 0, 0, 0.05);
 }
 
 /* ─── Buttons ─────────────────────────────────────────── */
@@ -159,7 +171,7 @@ h3 {
   gap: 8px;
   background: var(--color-black);
   color: var(--color-white);
-  font-family: 'Cabinet Grotesk', sans-serif;
+  font-family: "Cabinet Grotesk", sans-serif;
   font-weight: 800;
   font-size: 15px;
   padding: 12px 24px;
@@ -193,7 +205,7 @@ h3 {
 .tag {
   display: inline-block;
   padding: 4px 12px;
-  font-family: 'Cabinet Grotesk', sans-serif;
+  font-family: "Cabinet Grotesk", sans-serif;
   font-weight: 800;
   font-size: 12px;
   border-radius: 999px; /* Pill shape requested for badges */
@@ -224,32 +236,448 @@ h3 {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
-.stagger > *:nth-child(1) { animation-delay: 0ms; }
-.stagger > *:nth-child(2) { animation-delay: 60ms; }
-.stagger > *:nth-child(3) { animation-delay: 120ms; }
-.stagger > *:nth-child(4) { animation-delay: 180ms; }
-.stagger > *:nth-child(5) { animation-delay: 240ms; }
-.stagger > *:nth-child(6) { animation-delay: 300ms; }
+.stagger > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 60ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 180ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 240ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 300ms;
+}
 
 .spinner {
-  width: 16px; height: 16px;
-  border: 2px solid rgba(0,0,0,0.1);
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
   border-top-color: var(--color-black);
   border-radius: 50%;
   animation: spin 0.6s linear infinite;
 }
 
 .spinner-white {
-  border: 2px solid rgba(255,255,255,0.2);
+  border: 2px solid rgba(255, 255, 255, 0.2);
   border-top-color: var(--color-white);
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ─── Startup Loader ─────────────────────────────────── */
+
+.startup-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    radial-gradient(
+      circle at 50% 46%,
+      rgba(255, 225, 124, 0.34),
+      transparent 20%
+    ),
+    radial-gradient(
+      circle at 50% 62%,
+      rgba(183, 198, 194, 0.2),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 50% 74%,
+      rgba(255, 122, 24, 0.18),
+      transparent 20%
+    ),
+    linear-gradient(180deg, #fef6d7 0%, #ffe17c 42%, #f5efe4 100%);
+  animation: loaderFadeIn 220ms ease-out both;
+}
+
+.startup-loader--exit {
+  opacity: 0;
+  transform: scale(1.015);
+  transition:
+    opacity 520ms ease,
+    transform 520ms ease;
+  pointer-events: none;
+}
+
+.startup-loader--shatter .startup-loader__logo {
+  animation: logoShatter 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.startup-loader--shatter .startup-loader__pulse {
+  animation: pulseDim 620ms ease forwards;
+}
+
+.startup-loader--shatter .startup-loader__caption {
+  animation: captionFade 420ms ease forwards;
+}
+
+.startup-loader::before,
+.startup-loader::after {
+  content: "";
+  position: absolute;
+  inset: auto;
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.startup-loader::before {
+  width: min(72vw, 620px);
+  height: min(72vw, 620px);
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 225, 124, 0.18) 34%,
+    transparent 72%
+  );
+  filter: blur(8px);
+  animation: loaderBloom 2.6s ease-in-out infinite;
+}
+
+.startup-loader::after {
+  width: min(54vw, 440px);
+  height: min(54vw, 440px);
+  border: 2px solid rgba(26, 29, 26, 0.5);
+  box-shadow:
+    0 0 0 10px rgba(255, 255, 255, 0.25),
+    0 0 84px rgba(255, 122, 24, 0.08);
+  animation: loaderRing 2.6s ease-in-out infinite;
+}
+
+.startup-loader__backdrop {
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(26, 29, 26, 0.08) 0 1px,
+      transparent 1px
+    ),
+    radial-gradient(
+      circle at 50% 50%,
+      rgba(255, 255, 255, 0.22),
+      transparent 24%
+    );
+  background-size:
+    24px 24px,
+    100% 100%;
+  opacity: 0.54;
+}
+
+.startup-loader__embers {
+  position: absolute;
+  inset: 0;
+}
+
+.startup-loader__particle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--size);
+  height: var(--size);
+  margin-left: calc(var(--size) / -2);
+  margin-top: calc(var(--size) / -2);
+  border-radius: 999px;
+  background: var(--color);
+  box-shadow:
+    0 0 10px var(--glow),
+    0 0 22px rgba(255, 225, 124, 0.3);
+  opacity: 0;
+  filter: blur(0.4px);
+  animation: emberGather var(--duration) cubic-bezier(0.12, 0.9, 0.24, 1)
+    var(--delay) forwards;
+}
+
+.startup-loader__core {
+  position: relative;
+  z-index: 2;
+  width: min(42vw, 340px);
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+}
+
+.startup-loader__pulse {
+  position: absolute;
+  inset: 16%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.42),
+    rgba(255, 225, 124, 0.22) 35%,
+    transparent 70%
+  );
+  filter: blur(8px);
+  animation: loaderPulse 1.8s ease-in-out infinite;
+}
+
+.startup-loader__shards {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.startup-loader__shard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: var(--shard-width);
+  height: var(--shard-height);
+  margin-left: calc(var(--shard-width) / -2);
+  margin-top: calc(var(--shard-height) / -2);
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.95),
+    rgba(255, 225, 124, 0.95)
+  );
+  border: 1px solid rgba(26, 29, 26, 0.2);
+  border-radius: 999px;
+  opacity: 0;
+  box-shadow: 0 0 14px rgba(255, 225, 124, 0.45);
+}
+
+.startup-loader__logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(0.68) rotate(-3deg);
+  filter: brightness(1.08) drop-shadow(0 0 14px rgba(255, 255, 255, 0.28))
+    drop-shadow(0 0 28px rgba(255, 225, 124, 0.22));
+  animation: logoForge 2.2s cubic-bezier(0.12, 0.9, 0.24, 1) 520ms forwards;
+}
+
+.startup-loader__logo--shatter {
+  animation: logoShatter 620ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.startup-loader__caption {
+  position: absolute;
+  bottom: max(7vh, 32px);
+  z-index: 3;
+  font-family: "Cabinet Grotesk", sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  color: rgba(26, 29, 26, 0.74);
+  opacity: 0;
+  animation: captionGlow 1.4s ease-in-out 520ms forwards;
+}
+
+.startup-loader--exit .startup-loader__logo,
+.startup-loader--exit .startup-loader__caption,
+.startup-loader--exit .startup-loader__pulse {
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
+.startup-loader--shatter .startup-loader__shard {
+  animation: shardBurst var(--shard-duration) cubic-bezier(0.16, 1, 0.3, 1)
+    var(--shard-delay) forwards;
+}
+
+@keyframes loaderFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes loaderBloom {
+  0%,
+  100% {
+    transform: scale(0.96);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseDim {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.12);
+  }
+}
+
+@keyframes loaderRing {
+  0%,
+  100% {
+    transform: scale(0.96) rotate(0deg);
+    opacity: 0.46;
+  }
+  50% {
+    transform: scale(1.02) rotate(10deg);
+    opacity: 0.76;
+  }
+}
+
+@keyframes loaderPulse {
+  0%,
+  100% {
+    transform: scale(0.94);
+    opacity: 0.52;
+  }
+  50% {
+    transform: scale(1.04);
+    opacity: 0.96;
+  }
+}
+
+@keyframes emberGather {
+  0% {
+    opacity: 0;
+    transform: translate3d(var(--start-x), var(--start-y), 0) scale(0.2);
+    filter: blur(1.2px) brightness(0.9);
+  }
+  12% {
+    opacity: 1;
+  }
+  55% {
+    opacity: 0.9;
+    transform: translate3d(
+        calc(var(--start-x) * 0.36),
+        calc(var(--start-y) * 0.36),
+        0
+      )
+      scale(1);
+    filter: blur(0.6px) brightness(1.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--end-x), var(--end-y), 0) scale(0.08);
+    filter: blur(2px) brightness(0.8);
+  }
+}
+
+@keyframes logoForge {
+  0% {
+    opacity: 0;
+    transform: scale(0.58) rotate(-6deg);
+    filter: blur(8px) brightness(0.7) drop-shadow(0 0 0 rgba(0, 0, 0, 0));
+  }
+  30% {
+    opacity: 0.65;
+    transform: scale(0.82) rotate(2deg);
+    filter: blur(2px) brightness(1.35)
+      drop-shadow(0 0 18px rgba(255, 255, 255, 0.4));
+  }
+  62% {
+    opacity: 1;
+    transform: scale(1.02) rotate(0deg);
+    filter: blur(0) brightness(1.08)
+      drop-shadow(0 0 20px rgba(255, 255, 255, 0.28))
+      drop-shadow(0 0 42px rgba(255, 225, 124, 0.22));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0) brightness(1) drop-shadow(0 0 18px rgba(255, 255, 255, 0.2))
+      drop-shadow(0 0 32px rgba(255, 225, 124, 0.18));
+  }
+}
+
+@keyframes logoShatter {
+  0% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    filter: blur(0) brightness(1.05)
+      drop-shadow(0 0 18px rgba(255, 255, 255, 0.2));
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.02) rotate(-1deg);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88) rotate(8deg);
+    filter: blur(4px) brightness(1.3)
+      drop-shadow(0 0 30px rgba(255, 225, 124, 0.26));
+  }
+}
+
+@keyframes shardBurst {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) scaleX(0.6) scaleY(0.7)
+      rotate(var(--shard-rotate));
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(var(--shard-x), var(--shard-y), 0) scaleX(1.2)
+      scaleY(0.7) rotate(calc(var(--shard-rotate) + 28deg));
+  }
+}
+
+@keyframes captionGlow {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    letter-spacing: 0.45em;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    letter-spacing: 0.3em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .startup-loader,
+  .startup-loader::before,
+  .startup-loader::after,
+  .startup-loader__particle,
+  .startup-loader__pulse,
+  .startup-loader__shard,
+  .startup-loader__logo,
+  .startup-loader__caption {
+    animation: none !important;
+  }
+
+  .startup-loader__logo {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+
+  .startup-loader__caption {
+    opacity: 0.9;
+  }
 }
 
 /* ─── Scrollbar ───────────────────────────────────────── */
@@ -281,8 +709,9 @@ h3 {
 }
 
 .burning-lab-card:hover {
-  box-shadow: 4px 4px 0px 0px var(--color-black),
-              0 0 20px rgba(255, 107, 53, 0.15);
+  box-shadow:
+    4px 4px 0px 0px var(--color-black),
+    0 0 20px rgba(255, 107, 53, 0.15);
 }
 
 .particles-layer {
@@ -325,15 +754,17 @@ h3 {
   20% {
     color: #ff6b35;
     filter: brightness(1.6);
-    text-shadow: 0 0 6px rgba(255, 107, 53, 0.8),
-                 0 0 12px rgba(255, 69, 0, 0.5);
+    text-shadow:
+      0 0 6px rgba(255, 107, 53, 0.8),
+      0 0 12px rgba(255, 69, 0, 0.5);
     transform: translateY(-1px) scale(1.05);
   }
   50% {
     color: #ff4500;
     filter: brightness(1.8);
-    text-shadow: 0 0 8px rgba(255, 69, 0, 0.9),
-                 0 -4px 16px rgba(255, 107, 53, 0.6);
+    text-shadow:
+      0 0 8px rgba(255, 69, 0, 0.9),
+      0 -4px 16px rgba(255, 107, 53, 0.6);
     opacity: 0.8;
     transform: translateY(-6px) scale(0.95);
   }
@@ -373,7 +804,8 @@ h3 {
   }
   50% {
     opacity: 0.8;
-    transform: translate(calc(var(--px) * 0.5), calc(var(--py) * 0.5)) scale(0.8);
+    transform: translate(calc(var(--px) * 0.5), calc(var(--py) * 0.5))
+      scale(0.8);
     filter: blur(0.5px) brightness(1.5);
   }
   100% {
@@ -414,33 +846,41 @@ h3 {
 /* ── Subtle ember glow on card bottom edge during burn ── */
 
 .burning-lab-card::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   height: 2px;
-  background: linear-gradient(90deg,
+  background: linear-gradient(
+    90deg,
     transparent 0%,
     rgba(255, 107, 53, 0) 20%,
     rgba(255, 107, 53, 0) 80%,
-    transparent 100%);
+    transparent 100%
+  );
   opacity: 0;
   transition: opacity 0.3s;
 }
 
 .burning-lab-card:hover::after {
   opacity: 1;
-  background: linear-gradient(90deg,
+  background: linear-gradient(
+    90deg,
     transparent 0%,
     rgba(255, 107, 53, 0.6) 20%,
     rgba(255, 69, 0, 0.8) 50%,
     rgba(255, 107, 53, 0.6) 80%,
-    transparent 100%);
+    transparent 100%
+  );
   animation: emberGlow 1.5s ease-in-out infinite alternate;
 }
 
 @keyframes emberGlow {
-  0% { filter: brightness(0.8); }
-  100% { filter: brightness(1.3); }
+  0% {
+    filter: brightness(0.8);
+  }
+  100% {
+    filter: brightness(1.3);
+  }
 }

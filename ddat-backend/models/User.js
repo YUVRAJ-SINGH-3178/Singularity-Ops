@@ -55,4 +55,8 @@ const userSchema = new mongoose.Schema({
   },
 });
 
+userSchema.index({ organization: 1, role: 1, displayName: 1 });
+userSchema.index({ labKey: 1, requestedRole: 1, requestedRoleAt: -1 });
+userSchema.index({ organization: 1, labKey: 1, displayName: 1 });
+
 module.exports = mongoose.model("User", userSchema);

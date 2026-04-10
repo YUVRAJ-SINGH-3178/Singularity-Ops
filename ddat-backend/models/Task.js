@@ -139,4 +139,9 @@ const taskSchema = new mongoose.Schema(
   },
 );
 
+taskSchema.index({ organization: 1, status: 1, createdAt: -1 });
+taskSchema.index({ organization: 1, labKey: 1, status: 1, createdAt: -1 });
+taskSchema.index({ createdByWallet: 1, createdAt: -1 });
+taskSchema.index({ assignedToWallet: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Task", taskSchema);

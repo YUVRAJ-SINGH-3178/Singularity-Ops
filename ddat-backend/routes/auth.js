@@ -1,7 +1,9 @@
 const crypto = require("crypto");
 const express = require("express");
+const mongoose = require("mongoose");
 const { ethers } = require("ethers");
 const User = require("../models/User");
+const AuthNonce = require("../models/AuthNonce");
 const { APP_ORGANIZATION } = require("../config/app");
 const { requireAuth, signAuthToken } = require("../middleware/auth");
 
@@ -10,8 +12,63 @@ const router = express.Router();
 const nonceStore = new Map();
 const NONCE_TTL_MS = Number(process.env.AUTH_NONCE_TTL_MS || 5 * 60 * 1000);
 
+function isMongoReady() {
+  return mongoose.connection.readyState === 1;
+}
+
 function cleanupNonce(walletAddress) {
   nonceStore.delete(walletAddress);
+}
+
+function sweepExpiredInMemoryNonces(now = Date.now()) {
+  for (const [walletAddress, entry] of nonceStore.entries()) {
+    if (!entry || Number(entry.expiresAt || 0) <= now) {
+      nonceStore.delete(walletAddress);
+    }
+  }
+}
+
+async function storeNonce(walletAddress, nonce, expiresAtMs) {
+  if (isMongoReady()) {
+    await AuthNonce.findOneAndUpdate(
+      { walletAddress },
+      {
+        walletAddress,
+        nonce,
+        expiresAt: new Date(expiresAtMs),
+      },
+      {
+        upsert: true,
+      },
+    );
+    return;
+  }
+
+  sweepExpiredInMemoryNonces();
+  nonceStore.set(walletAddress, { nonce, expiresAt: expiresAtMs });
+}
+
+async function getNonceEntry(walletAddress) {
+  if (isMongoReady()) {
+    const entry = await AuthNonce.findOne({ walletAddress }).lean();
+    if (!entry) return null;
+    return {
+      nonce: entry.nonce,
+      expiresAt: new Date(entry.expiresAt).getTime(),
+    };
+  }
+
+  sweepExpiredInMemoryNonces();
+  return nonceStore.get(walletAddress) || null;
+}
+
+async function deleteNonce(walletAddress) {
+  if (isMongoReady()) {
+    await AuthNonce.deleteOne({ walletAddress });
+    return;
+  }
+
+  cleanupNonce(walletAddress);
 }
 
 function buildAuthMessage(walletAddress, nonce) {
@@ -24,30 +81,38 @@ function buildAuthMessage(walletAddress, nonce) {
 }
 
 router.post("/nonce", async (req, res) => {
-  const walletAddress = String(req.body?.walletAddress || "")
-    .toLowerCase()
-    .trim();
+  try {
+    const walletAddress = String(req.body?.walletAddress || "")
+      .toLowerCase()
+      .trim();
 
-  if (!ethers.isAddress(walletAddress)) {
-    return res
-      .status(400)
-      .json({ success: false, error: "Invalid wallet address" });
+    if (!ethers.isAddress(walletAddress)) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Invalid wallet address" });
+    }
+
+    const nonce = crypto.randomBytes(16).toString("hex");
+    const expiresAt = Date.now() + NONCE_TTL_MS;
+
+    await storeNonce(walletAddress, nonce, expiresAt);
+
+    return res.json({
+      success: true,
+      data: {
+        walletAddress,
+        nonce,
+        message: buildAuthMessage(walletAddress, nonce),
+        expiresAt,
+      },
+    });
+  } catch (error) {
+    console.error("Nonce generation failed:", error.message);
+    return res.status(500).json({
+      success: false,
+      error: "Failed to generate auth challenge",
+    });
   }
-
-  const nonce = crypto.randomBytes(16).toString("hex");
-  const expiresAt = Date.now() + NONCE_TTL_MS;
-
-  nonceStore.set(walletAddress, { nonce, expiresAt });
-
-  return res.json({
-    success: true,
-    data: {
-      walletAddress,
-      nonce,
-      message: buildAuthMessage(walletAddress, nonce),
-      expiresAt,
-    },
-  });
 });
 
 router.post("/verify", async (req, res) => {
@@ -68,9 +133,9 @@ router.post("/verify", async (req, res) => {
       .json({ success: false, error: "Signature is required" });
   }
 
-  const nonceEntry = nonceStore.get(walletAddress);
+  const nonceEntry = await getNonceEntry(walletAddress);
   if (!nonceEntry || nonceEntry.expiresAt < Date.now()) {
-    cleanupNonce(walletAddress);
+    await deleteNonce(walletAddress);
     return res
       .status(401)
       .json({ success: false, error: "Nonce expired or not found" });
@@ -88,7 +153,7 @@ router.post("/verify", async (req, res) => {
         .json({ success: false, error: "Signature verification failed" });
     }
 
-    cleanupNonce(walletAddress);
+    await deleteNonce(walletAddress);
 
     await User.findOneAndUpdate(
       { walletAddress },

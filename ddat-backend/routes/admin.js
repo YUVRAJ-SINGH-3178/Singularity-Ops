@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const { ethers } = require("ethers");
 const {
   getForfeitedPoolBalance,
@@ -8,13 +9,21 @@ const {
 const router = express.Router();
 
 function isAuthorized(req) {
-  const configuredAdminKey = process.env.ADMIN_API_KEY;
+  const configuredAdminKey = String(process.env.ADMIN_API_KEY || "");
   if (!configuredAdminKey) {
     return false;
   }
 
-  const headerKey = req.header("x-admin-key");
-  return typeof headerKey === "string" && headerKey === configuredAdminKey;
+  const headerKey = String(req.header("x-admin-key") || "");
+  if (!headerKey) return false;
+
+  const expected = Buffer.from(configuredAdminKey);
+  const provided = Buffer.from(headerKey);
+  if (expected.length !== provided.length) {
+    return false;
+  }
+
+  return crypto.timingSafeEqual(expected, provided);
 }
 
 function requireAdminAuth(req, res, next) {
@@ -40,7 +49,7 @@ router.get("/forfeited-pool", requireAdminAuth, async (req, res) => {
     console.error("Error reading forfeited pool balance:", error.message);
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: "Failed to read forfeited pool balance",
     });
   }
 });
@@ -91,7 +100,7 @@ router.post("/forfeited-pool/withdraw", requireAdminAuth, async (req, res) => {
     const tx = await withdrawForfeitedPoolFunds(
       toAddress,
       normalizedAmountWei,
-      normalizedPurpose
+      normalizedPurpose,
     );
 
     return res.json({
@@ -102,7 +111,7 @@ router.post("/forfeited-pool/withdraw", requireAdminAuth, async (req, res) => {
     console.error("Error withdrawing forfeited pool funds:", error.message);
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: "Failed to process forfeited pool withdrawal",
     });
   }
 });
