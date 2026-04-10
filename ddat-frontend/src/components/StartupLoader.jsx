@@ -1,62 +1,50 @@
 import { useState } from "react";
 
-const PARTICLE_COUNT = 34;
-const SHARD_COUNT = 12;
+const EMBER_COUNT = 44;
+const SMOKE_COUNT = 8;
 
-const createParticle = (index) => {
-  const angle =
-    (index / PARTICLE_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.55;
-  const outwardRadius = 18 + Math.random() * 30;
-  const inwardRadius = 2 + Math.random() * 10;
-  const verticalLift = 8 + Math.random() * 18;
-  const travelBias = index % 3 === 0 ? -1 : 1;
+const createEmber = (index) => {
+  const startX = Math.random() * 260 - 130;
+  const endX = startX * (0.25 + Math.random() * 0.8);
 
   return {
     id: index,
-    size: 3 + Math.random() * 5,
-    delay: Math.random() * 780 + index * 18,
-    duration: 1200 + Math.random() * 720,
+    size: 2 + Math.random() * 5,
+    delay: Math.random() * 1500,
+    duration: 1000 + Math.random() * 1200,
     color:
-      Math.random() > 0.72
+      Math.random() > 0.78
         ? "var(--color-yellow)"
-        : Math.random() > 0.35
-          ? "#ff8a3d"
+        : Math.random() > 0.45
+          ? "#ff9a48"
           : "#ff5f57",
-    glow:
-      Math.random() > 0.5
-        ? "rgba(255, 225, 124, 0.95)"
-        : "rgba(255, 122, 24, 0.85)",
-    startX:
-      Math.cos(angle) * outwardRadius + travelBias * (24 + Math.random() * 34),
-    startY: Math.sin(angle) * outwardRadius + 26 + Math.random() * 44,
-    endX: Math.cos(angle) * inwardRadius,
-    endY: Math.sin(angle) * inwardRadius - verticalLift,
+    startX: `${startX}px`,
+    endX: `${endX}px`,
+    lift: `${120 + Math.random() * 220}px`,
   };
 };
 
-const createShard = (index) => {
-  const angle =
-    (index / SHARD_COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.35;
-  const travel = 18 + Math.random() * 28;
-
+const createSmoke = (index) => {
+  const startX = Math.random() * 160 - 80;
+  const driftX = startX + (Math.random() * 120 - 60);
   return {
     id: index,
-    delay: 1950 + index * 22,
-    duration: 580 + Math.random() * 220,
-    width: 14 + Math.random() * 24,
-    height: 3 + Math.random() * 3,
-    rotate: Math.random() * 28 - 14,
-    x: Math.cos(angle) * travel,
-    y: Math.sin(angle) * travel - 6,
+    width: 34 + Math.random() * 42,
+    height: 16 + Math.random() * 24,
+    delay: Math.random() * 2000,
+    duration: 2400 + Math.random() * 1800,
+    startX: `${startX}px`,
+    driftX: `${driftX}px`,
+    lift: `${100 + Math.random() * 130}px`,
   };
 };
 
 export default function StartupLoader({ phase = "visible" }) {
-  const [particles] = useState(() =>
-    Array.from({ length: PARTICLE_COUNT }, (_, index) => createParticle(index)),
+  const [embers] = useState(() =>
+    Array.from({ length: EMBER_COUNT }, (_, index) => createEmber(index)),
   );
-  const [shards] = useState(() =>
-    Array.from({ length: SHARD_COUNT }, (_, index) => createShard(index)),
+  const [smoke] = useState(() =>
+    Array.from({ length: SMOKE_COUNT }, (_, index) => createSmoke(index)),
   );
 
   const isShattering = phase === "shattering";
@@ -68,54 +56,76 @@ export default function StartupLoader({ phase = "visible" }) {
       aria-live="polite"
       aria-label="Loading app"
     >
-      <div className="startup-loader__backdrop" aria-hidden="true" />
-      <div className="startup-loader__embers" aria-hidden="true">
-        {particles.map((particle) => (
+      <div className="startup-loader__noise" aria-hidden="true" />
+      <div className="startup-loader__grid" aria-hidden="true" />
+
+      <div className="startup-loader__stage">
+        <div className="startup-loader__logo-zone">
+          <div className="startup-loader__halo" aria-hidden="true" />
+          <div className="startup-loader__fireback" aria-hidden="true">
+            <span className="startup-loader__heat-wave startup-loader__heat-wave--left" />
+            <span className="startup-loader__heat-wave startup-loader__heat-wave--mid" />
+            <span className="startup-loader__heat-wave startup-loader__heat-wave--right" />
+          </div>
+
+          <div className="startup-loader__embers" aria-hidden="true">
+            {embers.map((ember) => (
+              <span
+                key={ember.id}
+                className="startup-loader__ember"
+                style={{
+                  "--ember-size": `${ember.size}px`,
+                  "--ember-delay": `${ember.delay}ms`,
+                  "--ember-duration": `${ember.duration}ms`,
+                  "--ember-color": ember.color,
+                  "--ember-start-x": ember.startX,
+                  "--ember-end-x": ember.endX,
+                  "--ember-lift": ember.lift,
+                }}
+              />
+            ))}
+          </div>
+
+          <div className="startup-loader__smoke" aria-hidden="true">
+            {smoke.map((cloud) => (
+              <span
+                key={cloud.id}
+                className="startup-loader__smoke-puff"
+                style={{
+                  "--smoke-width": `${cloud.width}px`,
+                  "--smoke-height": `${cloud.height}px`,
+                  "--smoke-delay": `${cloud.delay}ms`,
+                  "--smoke-duration": `${cloud.duration}ms`,
+                  "--smoke-start-x": cloud.startX,
+                  "--smoke-drift-x": cloud.driftX,
+                  "--smoke-lift": cloud.lift,
+                }}
+              />
+            ))}
+          </div>
+
+          <img
+            src="/singularity_new_logo.png"
+            alt="Singularity Ops logo"
+            className={`startup-loader__logo ${isShattering ? "startup-loader__logo--shatter" : ""}`}
+          />
+        </div>
+      </div>
+
+      <div className="startup-loader__shatter" aria-hidden="true">
+        {embers.slice(0, 12).map((ember) => (
           <span
-            key={particle.id}
-            className="startup-loader__particle"
+            key={`shatter-${ember.id}`}
+            className="startup-loader__shard"
             style={{
-              "--size": `${particle.size}px`,
-              "--delay": `${particle.delay}ms`,
-              "--duration": `${particle.duration}ms`,
-              "--color": particle.color,
-              "--glow": particle.glow,
-              "--start-x": `${particle.startX}vw`,
-              "--start-y": `${particle.startY}vh`,
-              "--end-x": `${particle.endX}vw`,
-              "--end-y": `${particle.endY}vh`,
+              "--shard-delay": `${1600 + ember.id * 20}ms`,
+              "--shard-duration": `${460 + ember.id * 8}ms`,
+              "--shard-x": ember.endX,
+              "--shard-y": ember.lift,
             }}
           />
         ))}
       </div>
-
-      <div className="startup-loader__core">
-        <div className="startup-loader__pulse" aria-hidden="true" />
-        <div className="startup-loader__shards" aria-hidden="true">
-          {shards.map((shard) => (
-            <span
-              key={shard.id}
-              className="startup-loader__shard"
-              style={{
-                "--shard-delay": `${shard.delay}ms`,
-                "--shard-duration": `${shard.duration}ms`,
-                "--shard-width": `${shard.width}px`,
-                "--shard-height": `${shard.height}px`,
-                "--shard-rotate": `${shard.rotate}deg`,
-                "--shard-x": `${shard.x}vw`,
-                "--shard-y": `${shard.y}vh`,
-              }}
-            />
-          ))}
-        </div>
-        <img
-          src="/singularity_new_logo.png"
-          alt="Singularity Ops logo"
-          className={`startup-loader__logo ${isShattering ? "startup-loader__logo--shatter" : ""}`}
-        />
-      </div>
-
-      <div className="startup-loader__caption">Forging the interface</div>
     </div>
   );
 }

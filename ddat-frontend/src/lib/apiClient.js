@@ -56,9 +56,10 @@ export async function apiRequest(path, options = {}) {
         localStorage.removeItem(AUTH_TOKEN_KEY);
 
         const authMessage = String(payload?.error || payload?.message || "");
-        const isAuthTokenError = /missing auth token|invalid auth token|invalid or expired auth token/i.test(
-          authMessage,
-        );
+        const isAuthTokenError =
+          /missing auth token|invalid auth token|invalid or expired auth token/i.test(
+            authMessage,
+          );
         const isManualDisconnect =
           localStorage.getItem("walletDisconnected") === "true";
 

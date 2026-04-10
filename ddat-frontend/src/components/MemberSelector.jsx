@@ -1,7 +1,31 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../lib/apiClient";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 
-export default function MemberSelector({ labKey, selectedWallet, onWalletChange, requesterWallet = "", includeAllMembers = false, disabled = false }) {
+function getInitials(name) {
+  if (!name) return "??";
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0])
+    .join("")
+    .toUpperCase();
+}
+
+function getMemberAvatarUrl(member) {
+  const seed = member?.walletAddress || member?.displayName || "member";
+  return `https://api.dicebear.com/9.x/adventurer-neutral/svg?seed=${encodeURIComponent(seed)}`;
+}
+
+export default function MemberSelector({
+  labKey,
+  selectedWallet,
+  onWalletChange,
+  requesterWallet = "",
+  includeAllMembers = false,
+  disabled = false,
+}) {
   const [members, setMembers] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -22,10 +46,13 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
       setError("");
       try {
         const queryParts = [];
-        if (requesterWallet) queryParts.push(`wallet=${encodeURIComponent(requesterWallet)}`);
+        if (requesterWallet)
+          queryParts.push(`wallet=${encodeURIComponent(requesterWallet)}`);
         if (includeAllMembers) queryParts.push("includeAll=1");
         const query = queryParts.length > 0 ? `?${queryParts.join("&")}` : "";
-        const payload = await apiRequest(`/user/members/by-lab/${labKey}${query}`);
+        const payload = await apiRequest(
+          `/user/members/by-lab/${labKey}${query}`,
+        );
 
         if (payload.success) {
           setMembers(payload.data || []);
@@ -64,8 +91,9 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
   const filteredMembers = members.filter(
     (member) =>
       member.displayName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (member.email && member.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      member.walletAddress.toLowerCase().includes(searchTerm.toLowerCase())
+      (member.email &&
+        member.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      member.walletAddress.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const handleMemberSelect = (wallet) => {
@@ -123,9 +151,26 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
             onClick={() => !disabled && setShowDropdown(!showDropdown)}
             className={`neo-input cursor-pointer flex items-center justify-between ${disabled ? "opacity-50 cursor-not-allowed" : ""}`}
           >
-            <span className={selectedWallet ? "text-black" : "text-black/40"}>
-              {selectedMemberDisplay || "Select a member..."}
-            </span>
+            <div className="flex min-w-0 items-center gap-2">
+              {selectedMember ? (
+                <Avatar className="h-7 w-7">
+                  <AvatarImage
+                    src={getMemberAvatarUrl(selectedMember)}
+                    alt={`${selectedMember.displayName} avatar`}
+                  />
+                  <AvatarFallback>
+                    {getInitials(selectedMember.displayName)}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="h-7 w-7 rounded-full border-2 border-black/30 bg-white" />
+              )}
+              <span
+                className={`truncate ${selectedWallet ? "text-black" : "text-black/40"}`}
+              >
+                {selectedMemberDisplay || "Select a member..."}
+              </span>
+            </div>
             <span className="text-xs font-bold">▼</span>
           </div>
 
@@ -151,7 +196,9 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
                   </div>
                 ) : filteredMembers.length === 0 ? (
                   <div className="px-3 py-4 text-center text-sm text-black/50 font-medium">
-                    {searchTerm ? "No members matching search" : "No members in this lab"}
+                    {searchTerm
+                      ? "No members matching search"
+                      : "No members in this lab"}
                   </div>
                 ) : (
                   filteredMembers.map((member) => (
@@ -164,26 +211,41 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
                           : "hover:bg-[var(--color-cream)]"
                       }`}
                     >
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="font-bold text-black">{member.displayName}</div>
-                        {member.role && (
-                          <div className="text-xs font-semibold uppercase tracking-wider text-black/60 bg-black/5 px-2 py-0.5 rounded">
-                            {member.role}
+                      <div className="flex items-start gap-3">
+                        <Avatar className="h-10 w-10">
+                          <AvatarImage
+                            src={getMemberAvatarUrl(member)}
+                            alt={`${member.displayName} avatar`}
+                          />
+                          <AvatarFallback>
+                            {getInitials(member.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-baseline justify-between gap-2">
+                            <div className="font-bold text-black truncate">
+                              {member.displayName}
+                            </div>
+                            {member.role && (
+                              <div className="text-xs font-semibold uppercase tracking-wider text-black/60 bg-black/5 px-2 py-0.5 rounded whitespace-nowrap">
+                                {member.role}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      {member.email && (
-                        <div className="text-xs text-black/60 font-medium mt-1">
-                          {member.email}
+                          {member.email && (
+                            <div className="text-xs text-black/60 font-medium mt-1 truncate">
+                              {member.email}
+                            </div>
+                          )}
+                          {member.organization && (
+                            <div className="text-xs text-black/50 font-medium truncate">
+                              {member.organization}
+                            </div>
+                          )}
+                          <div className="text-xs text-black/40 font-mono mt-1 truncate">
+                            {member.walletAddress}
+                          </div>
                         </div>
-                      )}
-                      {member.organization && (
-                        <div className="text-xs text-black/50 font-medium">
-                          {member.organization}
-                        </div>
-                      )}
-                      <div className="text-xs text-black/40 font-mono mt-1">
-                        {member.walletAddress}
                       </div>
                     </div>
                   ))
@@ -195,8 +257,8 @@ export default function MemberSelector({ labKey, selectedWallet, onWalletChange,
       )}
 
       <p className="text-xs text-black/50 font-medium">
-        {members.length > 0 
-          ? "Select from lab members or switch to manual wallet entry" 
+        {members.length > 0
+          ? "Select from lab members or switch to manual wallet entry"
           : "Enter wallet address manually"}
       </p>
     </div>

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import MemberSelector from "../components/MemberSelector";
+import { Calendar } from "../components/ui/calendar";
 import { FALLBACK_LABS } from "../lib/labCatalog";
 import {
   canCreateEnterpriseTask as canCreateEnterpriseTaskByRole,
@@ -18,6 +19,23 @@ function getLocalDateInputValue(date = new Date()) {
   return `${year}-${month}-${day}`;
 }
 
+function parseLocalDateInputValue(value) {
+  if (!value) return null;
+  const [year, month, day] = String(value).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(year, month - 1, day);
+}
+
+function getDateDisplayValue(value) {
+  const parsed = parseLocalDateInputValue(value);
+  if (!parsed) return "Select date";
+  return parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
 export default function CreateCommitment({ wallet }) {
   const navigate = useNavigate();
   const [profile, setProfile] = useState(null);
@@ -31,6 +49,8 @@ export default function CreateCommitment({ wallet }) {
   const [endDate, setEndDate] = useState(() => getLocalDateInputValue());
   const [status, setStatus] = useState({ type: "", message: "" });
   const [loading, setLoading] = useState(false);
+  const [openPicker, setOpenPicker] = useState(null);
+  const pickerAreaRef = useRef(null);
 
   useEffect(() => {
     if (!wallet) return;
@@ -83,6 +103,14 @@ export default function CreateCommitment({ wallet }) {
     [profile],
   );
   const userIsMember = useMemo(() => isMember(profile?.role), [profile]);
+  const workDateObject = useMemo(
+    () => parseLocalDateInputValue(workDate),
+    [workDate],
+  );
+  const endDateObject = useMemo(
+    () => parseLocalDateInputValue(endDate),
+    [endDate],
+  );
 
   useEffect(() => {
     if (!wallet || !userIsMember) return;
@@ -96,6 +124,30 @@ export default function CreateCommitment({ wallet }) {
       setEndDate(workDate);
     }
   }, [workDate, endDate]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        pickerAreaRef.current &&
+        !pickerAreaRef.current.contains(event.target)
+      ) {
+        setOpenPicker(null);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const selectedLabName = useMemo(() => {
+    return labs.find((lab) => lab.key === labKey)?.name || "Select lab";
+  }, [labs, labKey]);
+
+  const selectedSourceLabel = useMemo(() => {
+    return source === "enterprise"
+      ? "Enterprise Assigned"
+      : "Employee Self Created";
+  }, [source]);
 
   const submitTask = async (e) => {
     e.preventDefault();
@@ -213,67 +265,177 @@ export default function CreateCommitment({ wallet }) {
             />
           </div>
 
-          <div className="grid sm:grid-cols-2 gap-5">
+          <div ref={pickerAreaRef} className="grid sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
                 Lab
               </label>
-              <select
-                value={labKey}
-                onChange={(e) => setLabKey(e.target.value)}
-                className="neo-input"
-                disabled={loading}
-              >
-                {labs.map((lab) => (
-                  <option key={lab.key} value={lab.key}>
-                    {lab.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenPicker(openPicker === "lab" ? null : "lab")
+                  }
+                  disabled={loading}
+                  className="neo-input w-full !px-3 !py-2.5 text-sm text-black text-left flex items-center justify-between"
+                >
+                  <span className="font-semibold truncate pr-3">
+                    {selectedLabName}
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wide text-black/60">
+                    Pick
+                  </span>
+                </button>
+                {openPicker === "lab" && (
+                  <div className="absolute top-full left-0 right-0 mt-2 z-40 bg-white border-2 border-black rounded-lg shadow-hard overflow-hidden">
+                    {labs.map((lab) => (
+                      <button
+                        key={lab.key}
+                        type="button"
+                        onClick={() => {
+                          setLabKey(lab.key);
+                          setOpenPicker(null);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 text-sm text-black border-b border-black/10 font-semibold transition-colors ${
+                          lab.key === labKey
+                            ? "bg-[var(--color-yellow)]"
+                            : "bg-white hover:bg-[#f4f4f5]"
+                        }`}
+                      >
+                        {lab.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
             <div>
               <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
-                Start Date
+                Task Source
               </label>
-              <input
-                type="date"
-                value={workDate}
-                onChange={(e) => setWorkDate(e.target.value)}
-                className="neo-input"
-                disabled={loading}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
-                End Date
-              </label>
-              <input
-                type="date"
-                value={endDate}
-                min={workDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="neo-input"
-                disabled={loading}
-              />
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenPicker(openPicker === "source" ? null : "source")
+                  }
+                  disabled={loading || !canCreateEnterpriseTask}
+                  className="neo-input w-full !px-3 !py-2.5 text-sm text-black text-left flex items-center justify-between"
+                >
+                  <span className="font-semibold truncate pr-3">
+                    {selectedSourceLabel}
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wide text-black/60">
+                    Pick
+                  </span>
+                </button>
+                {openPicker === "source" && canCreateEnterpriseTask && (
+                  <div className="absolute top-full left-0 right-0 mt-2 z-40 bg-white border-2 border-black rounded-lg shadow-hard overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSource("enterprise");
+                        setOpenPicker(null);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 text-sm text-black border-b border-black/10 font-semibold transition-colors ${
+                        source === "enterprise"
+                          ? "bg-[var(--color-yellow)]"
+                          : "bg-white hover:bg-[#f4f4f5]"
+                      }`}
+                    >
+                      Enterprise Assigned
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSource("employee");
+                        setOpenPicker(null);
+                      }}
+                      className={`w-full text-left px-3 py-2.5 text-sm text-black font-semibold transition-colors ${
+                        source === "employee"
+                          ? "bg-[var(--color-yellow)]"
+                          : "bg-white hover:bg-[#f4f4f5]"
+                      }`}
+                    >
+                      Employee Self Created
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
-                Task Source
+                Start Date
               </label>
-              <select
-                value={source}
-                onChange={(e) => setSource(e.target.value)}
-                className="neo-input"
-                disabled={loading || !canCreateEnterpriseTask}
-              >
-                {canCreateEnterpriseTask && (
-                  <option value="enterprise">Enterprise Assigned</option>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenPicker(openPicker === "start" ? null : "start")
+                  }
+                  disabled={loading}
+                  className="neo-input w-full !px-3 !py-2.5 text-sm text-black text-left flex items-center justify-between"
+                >
+                  <span className="font-semibold">
+                    {getDateDisplayValue(workDate)}
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wide text-black/60">
+                    Pick
+                  </span>
+                </button>
+                {openPicker === "start" && (
+                  <div className="absolute top-full left-0 mt-2 z-40 w-full sm:w-[18rem]">
+                    <Calendar
+                      selected={workDateObject}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        setWorkDate(getLocalDateInputValue(date));
+                        setOpenPicker(null);
+                      }}
+                      disabled={loading}
+                    />
+                  </div>
                 )}
-                <option value="employee">Employee Self Created</option>
-              </select>
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
+                End Date
+              </label>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setOpenPicker(openPicker === "end" ? null : "end")
+                  }
+                  disabled={loading}
+                  className="neo-input w-full !px-3 !py-2.5 text-sm text-black text-left flex items-center justify-between"
+                >
+                  <span className="font-semibold">
+                    {getDateDisplayValue(endDate)}
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wide text-black/60">
+                    Pick
+                  </span>
+                </button>
+                {openPicker === "end" && (
+                  <div className="absolute top-full left-0 mt-2 z-40 w-full sm:w-[18rem]">
+                    <Calendar
+                      selected={endDateObject}
+                      minDate={workDateObject}
+                      onSelect={(date) => {
+                        if (!date) return;
+                        setEndDate(getLocalDateInputValue(date));
+                        setOpenPicker(null);
+                      }}
+                      disabled={loading}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
