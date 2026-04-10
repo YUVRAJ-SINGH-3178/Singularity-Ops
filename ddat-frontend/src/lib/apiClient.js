@@ -54,6 +54,22 @@ export async function apiRequest(path, options = {}) {
     if (!response.ok) {
       if (response.status === 401) {
         localStorage.removeItem(AUTH_TOKEN_KEY);
+
+        const authMessage = String(payload?.error || payload?.message || "");
+        const isAuthTokenError = /missing auth token|invalid auth token|invalid or expired auth token/i.test(
+          authMessage,
+        );
+        const isManualDisconnect =
+          localStorage.getItem("walletDisconnected") === "true";
+
+        // During user-initiated logout, ignore expected in-flight auth failures.
+        if (isManualDisconnect && isAuthTokenError) {
+          return {
+            success: false,
+            signedOut: true,
+            message: "Wallet disconnected",
+          };
+        }
       }
       throw new Error(deriveErrorMessage(response, text, payload));
     }

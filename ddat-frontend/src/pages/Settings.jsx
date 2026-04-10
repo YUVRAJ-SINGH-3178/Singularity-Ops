@@ -4,6 +4,7 @@ import { normalizeRole } from "../lib/roleUtils";
 import { listLabs } from "../lib/taskApi";
 import { getUserProfile, upsertUserProfile } from "../lib/userApi";
 import { APP_ORGANIZATION } from "../config";
+import { clearStoredAuthToken } from "../lib/authService";
 
 function hasMeaningfulProfile(profile) {
   if (!profile) return false;
@@ -255,7 +256,12 @@ export default function Settings({ wallet, setWallet, setProfile }) {
 
   const disconnectWallet = () => {
     localStorage.setItem("walletDisconnected", "true");
+    clearStoredAuthToken();
+    if (profileCacheKey) localStorage.removeItem(profileCacheKey);
+    if (settingsCacheKey) localStorage.removeItem(settingsCacheKey);
+    if (labsCacheKey) localStorage.removeItem(labsCacheKey);
     setWallet?.(null);
+    setProfile?.(null);
   };
 
   if (!wallet) {
