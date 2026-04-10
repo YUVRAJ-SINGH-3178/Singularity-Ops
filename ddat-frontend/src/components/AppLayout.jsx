@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isExecutive } from "../lib/roleUtils";
 import {
   checkSession,
@@ -14,6 +14,7 @@ const WALLET_AUTO_CONNECT_BLOCKED_KEY = "walletAutoConnectBlocked";
 export default function AppLayout({ children, wallet, setWallet, profile }) {
   const { pathname } = useLocation();
   const [notice, setNotice] = useState(null);
+  const authFlowVersionRef = useRef(0);
 
   const isExecutiveUser = isExecutive(profile?.role);
 
@@ -33,11 +34,22 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
 
   const restoreAuthenticatedWallet = useCallback(
     async (walletAddress) => {
+      const authFlowVersion = authFlowVersionRef.current;
+
       const token = getStoredAuthToken();
       if (!token) return false;
 
       try {
         const session = await checkSession();
+
+        if (authFlowVersion !== authFlowVersionRef.current) {
+          return false;
+        }
+
+        if (localStorage.getItem(WALLET_DISCONNECTED_KEY)) {
+          return false;
+        }
+
         const sessionWallet = String(session?.data?.walletAddress || "")
           .toLowerCase()
           .trim();
@@ -140,6 +152,9 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
     }
 
     try {
+      authFlowVersionRef.current += 1;
+      const authFlowVersion = authFlowVersionRef.current;
+
       console.log("[Wallet] Requesting accounts from MetaMask...");
       const accs = await window.ethereum.request({
         method: "eth_requestAccounts",
@@ -152,6 +167,11 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
       await establishWalletSession(walletAddress);
 
       console.log("[Wallet] Session established successfully");
+
+      if (authFlowVersion !== authFlowVersionRef.current) {
+        return;
+      }
+
       localStorage.removeItem(WALLET_DISCONNECTED_KEY);
       localStorage.removeItem(WALLET_AUTO_CONNECT_BLOCKED_KEY);
       setWallet(walletAddress);
@@ -163,6 +183,7 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
   };
 
   const disconnectWallet = () => {
+    authFlowVersionRef.current += 1;
     localStorage.setItem(WALLET_DISCONNECTED_KEY, "true");
     clearStoredAuthToken();
     setWallet(null);
@@ -247,6 +268,7 @@ export default function AppLayout({ children, wallet, setWallet, profile }) {
                 ⚙
               </Link>
               <button
+                type="button"
                 onClick={disconnectWallet}
                 className="w-10 h-10 border-2 border-black bg-[--color-white] flex items-center justify-center rounded-md hover:bg-[#ff5f57] hover:text-white transition-colors shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] translate-push"
                 title="Disconnect wallet"
