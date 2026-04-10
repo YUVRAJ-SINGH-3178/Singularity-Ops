@@ -178,6 +178,11 @@ function createApp() {
       return next();
     }
 
+    // Allow internal platform probes to pass even when HTTPS is enforced.
+    if (req.path === "/api/health" || req.path === "/") {
+      return next();
+    }
+
     const forwardedProto = req.header("x-forwarded-proto") || "";
     const isSecure =
       req.secure || forwardedProto.split(",")[0].trim() === "https";
