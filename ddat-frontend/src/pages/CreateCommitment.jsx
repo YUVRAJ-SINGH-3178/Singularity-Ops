@@ -236,7 +236,7 @@ export default function CreateCommitment({ wallet }) {
       </div>
 
       <div className="bg-white border-x-2 border-b-2 border-black rounded-b-2xl p-8 shadow-hard relative z-0 -mt-2">
-        <form onSubmit={submitTask} className="space-y-5">
+        <form ref={pickerAreaRef} onSubmit={submitTask} className="space-y-5">
           <div>
             <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
               Task Title
@@ -265,7 +265,7 @@ export default function CreateCommitment({ wallet }) {
             />
           </div>
 
-          <div ref={pickerAreaRef} className="grid sm:grid-cols-2 gap-5">
+          <div className="grid sm:grid-cols-2 gap-5">
             <div>
               <label className="block text-sm font-bold mb-2 uppercase tracking-wider text-black">
                 Lab
