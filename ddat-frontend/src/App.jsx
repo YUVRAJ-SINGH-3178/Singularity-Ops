@@ -12,7 +12,16 @@ import AdminRoleRequests from "./pages/AdminRoleRequests";
 function App() {
   const [wallet, setWallet] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [startupPhase, setStartupPhase] = useState("visible");
+  const [startupPhase, setStartupPhase] = useState(() => {
+    if (typeof window === "undefined") {
+      return "visible";
+    }
+
+    const prefersReducedMotion =
+      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+
+    return prefersReducedMotion ? "hidden" : "visible";
+  });
 
   const setWalletState = (nextWallet) => {
     setWallet(nextWallet);
@@ -45,11 +54,7 @@ function App() {
   }, [wallet, profile]);
 
   useEffect(() => {
-    const prefersReducedMotion =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
-
-    if (prefersReducedMotion) {
-      setStartupPhase("hidden");
+    if (startupPhase === "hidden") {
       return undefined;
     }
 
@@ -65,7 +70,7 @@ function App() {
       window.clearTimeout(shatterLoader);
       window.clearTimeout(hideLoader);
     };
-  }, []);
+  }, [startupPhase]);
 
   return (
     <BrowserRouter>
