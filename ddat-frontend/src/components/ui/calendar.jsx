@@ -140,7 +140,6 @@ export function Calendar({
               type="button"
               key={`${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`}
               onClick={() => !isDisabled && onSelect?.(dayValue)}
-              disabled={isDisabled}
               className={joinClasses(
                 "h-8 rounded-md border-2 border-black font-bold text-sm transition-colors",
                 isSelected
